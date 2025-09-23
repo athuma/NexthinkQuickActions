@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Nexthink Quick Actions",
+  "version": "1.0.0",
+  "description": "Allows customization of the Nexthink context menu.",
+  "permissions": ["activeTab", "storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.us.nexthink.cloud/*",
+        "https://*.eu.nexthink.cloud/*",
+        "https://*.pac.nexthink.cloud/*",
+        "https://*.meta.nexthink.cloud/*"
+      ],
+      "run_at": "document_idle",
+      "js": [
+        "option/lib/config-store.js",
+        "content.js",
+        "content-cheatsheet.js"
+      ]
+    }
+  ],
+  "icons": {
+    "16":  "icons/spark16.png",
+    "32":  "icons/spark32.png",
+    "48":  "icons/spark48.png",
+    "128": "icons/spark128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/spark16.png",
+      "32": "icons/spark32.png"
+    },
+    "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "option/options.html",
+    "open_in_tab": true
+  },
+  "storage": {
+    "managed_schema": "managed_schema.json"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*.png"
+      ],
+      "matches": [
+        "https://*.nexthink.cloud/*"
+      ]
+    }
+  ]
+}

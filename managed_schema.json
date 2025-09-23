@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "title": "Nexthink Quick Actions – Managed Configuration",
+  "properties": {
+    "policy": {
+      "type": "object",
+      "description": "How the managed configuration is applied by the extension",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["overlay", "seed"],
+          "description": "overlay: apply managed config at runtime (read-only) and allow user entries depending on flags; seed: import managed config once (typically at install) then let user manage"
+        },
+        "allowUserEntries": {
+          "type": "boolean",
+          "description": "In overlay mode, whether users may add their own entries in addition to managed ones"
+        },
+        "lockManagedEntries": {
+          "type": "boolean",
+          "description": "In overlay mode, prevent editing/removing of managed-provided entries (recommended)"
+        },
+        "seedReplace": {
+          "type": "boolean",
+          "description": "In seed mode, replace existing user configuration instead of seeding only when empty"
+        }
+      }
+    },
+    "instance": {
+      "type": "object",
+      "description": "Tenant settings (base URL)",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": {
+          "type": "string",
+          "description": "Base URL, protocol + host only",
+          "pattern": "^https?://[^/]+$"
+        }
+      },
+      "required": ["name", "url"]
+    },
+    "menu": {
+      "type": "array",
+      "description": "Quick Actions menu entries",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "description": "HTTP(S) URL with at least one placeholder (e.g. {devices_name} or {*full_name})",
+            "allOf": [
+              { "pattern": "^https?://[^/]+(?:/.*)?$" },
+              { "pattern": "\\{\\*?[A-Za-z0-9_:-]+\\}" }
+            ]
+          }
+        },
+        "required": ["name", "url"]
+      }
+    }
+  }
+}

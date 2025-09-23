@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nexthink Quick Actions</title>
+    <link rel="stylesheet" href="popup.css" />
+    <!-- Load shared config store before popup logic -->
+    <script src="../option/lib/config-store.js"></script>
+    <script src="popup.js"></script>
+  </head>
+  <body>
+    <div class="header-row">
+      <h1>Open in DeviceView</h1>
+      <button id="settingsBtn" class="icon-btn settings-btn" title="Settings" aria-label="Settings">
+        <span class="mask-icon icon-cog" aria-hidden="true"></span>
+      </button>
+    </div>
+    <form id="snForm" hidden>
+      <input id="deviceInput" type="text" placeholder="Device name…" autocomplete="off" />
+      <button id="openBtn" type="submit" disabled>Open</button>
+    </form>
+    <div id="hint" class="hint" hidden>Press Enter to open</div>
+    <div id="noInst" class="no-inst" hidden>
+      <button id="addInstBtn" class="btn-primary" type="button">Add Nexthink instance</button>
+    </div>
+  </body>
+  </html>

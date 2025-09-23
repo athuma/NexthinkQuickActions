@@ -1,0 +1,109 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Configuration</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="header">
+      <h1><img id="brandIcon" class="brand-icon" alt="" aria-hidden="true" />Nexthink Quick Actions configuration</h1>
+      <div id="version" class="version"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-content">
+        <!-- Nexthink Instance configuration block -->
+        <section class="section instance-card" id="instanceSection" aria-label="Nexthink instance configuration">
+          <h2 class="section-title">Nexthink Instance</h2>
+          <table class="cfg-table" id="instTable" aria-label="Nexthink Instance" style="display:none;">
+            <thead>
+              <tr>
+                <th scope="col">Instance name</th>
+                <th scope="col">Base URL</th>
+                <th scope="col" class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="instTbody"></tbody>
+          </table>
+          <div class="section-footer">
+            <button class="btn btn-success" id="instAddBtn" type="button">Add Instance</button>
+          </div>
+        </section>
+
+        <section class="section instance-card" id="menuSection" aria-label="Quick Actions menu entries">
+          <h2 class="section-title">Quick Actions menu entries</h2>
+          <div id="emptyState" class="empty-placeholder" hidden>No Nexthink Quick Actions configured</div>
+          <table class="cfg-table" aria-label="Nexthink Quick Actions configurations">
+            <thead>
+              <tr>
+                <th scope="col">Menu entries</th>
+                <th scope="col">URL</th>
+                <th scope="col" class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="cfgTbody">
+              <!-- Filled by options.js; shows an empty-row message when none -->
+            </tbody>
+          </table>
+        </section>
+        <!-- Floating Add button at bottom-right of panel content -->
+        <button class="btn add-floating" id="addBtn" type="button" aria-label="Add menu entry">Add</button>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="importBtn" type="button">Import</button>
+        <button class="btn" id="exportBtn" type="button">Export</button>
+        <input id="importFile" type="file" accept="application/json,application/javascript,.json,.js" hidden />
+      </div>
+    </div>
+    <!-- Import modal -->
+    <div id="importModal" class="modal" hidden>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+        <h2 id="importTitle">Import configurations</h2>
+        <p id="importSummary" class="muted">Choose how to apply imported items.</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="importCancelBtn" type="button">Cancel</button>
+          <button class="btn" id="importAddBtn" type="button">Add</button>
+          <button class="btn btn-danger" id="importReplaceBtn" type="button">Replace</button>
+        </div>
+      </div>
+    </div>
+    <!-- Instance add/edit modal -->
+    <div id="instanceModal" class="modal" hidden>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="instanceTitle">
+        <h2 id="instanceTitle">Instance configuration</h2>
+        <div class="field">
+          <label for="instNameInput">Instance name</label>
+          <input id="instNameInput" type="text" placeholder="e.g., Production" />
+          <div class="error-text" id="instNameErr" hidden>Name required</div>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label for="instUrlInput">Base URL</label>
+          <input id="instUrlInput" type="text" placeholder="https://your-instance.nexthink.cloud" />
+          <div class="help-text">Must be the hostname only: https://host.tld (no trailing slash, no path)</div>
+          <div class="error-text" id="instUrlErr" hidden>Invalid base URL. Use https://host.tld</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="instCancelBtn" type="button">Cancel</button>
+          <button class="btn" id="instSaveBtn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+    <!-- Delete confirmation modal -->
+    <div id="deleteModal" class="modal" hidden>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+        <h2 id="deleteTitle">Delete configuration</h2>
+        <p id="deleteSummary" class="muted">Are you sure you want to delete this entry?</p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="deleteCancelBtn" type="button">Cancel</button>
+          <button class="btn btn-danger" id="deleteConfirmBtn" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+    <script src="lib/config-store.js"></script>
+    <script src="lib/import-export-toolbar.js"></script>
+    <script src="lib/menu-entries-controller.js"></script>
+    <script src="lib/instance-section.js"></script>
+    <script src="options.js"></script>
+  </body>
+  </html>
