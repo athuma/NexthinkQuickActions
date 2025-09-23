@@ -188,7 +188,8 @@ function getMenuFilteredByCurrentColumn(callback) {
             .map((t) => String(t || '').trim().toLowerCase())
             .filter(Boolean);
 
-        if (!normalizedTokens.length) { callback([]); return; }
+        const uniqueTokens = Array.from(new Set(normalizedTokens));
+        if (!uniqueTokens.length) { callback([]); return; }
 
         const store = new window.NqaConfigStore();
         store.getMenu()
@@ -201,7 +202,7 @@ function getMenuFilteredByCurrentColumn(callback) {
                         const inner = rawPlaceholder.slice(1, -1);
                         const pattern = inner.replace(/\*/g, '.*');
                         const re = new RegExp('^' + pattern + '$', 'i');
-                        return normalizedTokens.some((token) => re.test(token));
+                        return uniqueTokens.some((token) => re.test(token));
                     });
                 });
                 callback(filtered);
@@ -216,31 +217,30 @@ function getMenuFilteredByCurrentColumn(callback) {
 // Remove any line breaks from the URL as the edition is a textarea.
 function buildActionItemsForDevice(callback) {
     // Get suitable menu entries for the current column
-    getMenuFilteredByCurrentColumn((cfgs) => {
+    const store = new window.NqaConfigStore();
+    getMenuFilteredByCurrentColumn(async (cfgs) => {
+        if (!Array.isArray(cfgs) || !cfgs.length) { callback([]); return; }
         const items = [];
-        const raw = window?.nqaPlaceHolder?.rawValues ?? {};
-        if (Array.isArray(cfgs) && cfgs.length) {
-            for (const it of cfgs) {
-                const label = (it?.name || it?.label) ?? '';
-                let url = it?.url ?? '';
-                if (!label || !url) continue;
-                try {
-                    // Remove any line breaks from the URL as the edition is a textarea
-                    url = url.replace(/[\r\n]+/g, '');
-                    // Replaces all {placeholder} with the corresponding value in window.nqaplaceholder
-                    url = url.replace(/\{([^}]+)\}/g, (match, placeholderPattern) => {
-                        //1. Transform the URL placeholder (ex: "*full_name") into regexp
-                        const regex = new RegExp('^' + placeholderPattern.replace(/\*/g, '.*') + '$', 'i');
-                        // 2. Search for a corresponding key in Rawvalues
-                        const matchingKey = Object.keys(raw).find(rawKey => regex.test(rawKey));
-                        // 3. return the value in case of match (ex: "results_ad_full_name") for "*full_name"
-                        if (matchingKey) return raw[matchingKey];
-                        // 4. Otherwise, we leave the placeholder as it is
-                        return match;
-                    });
-                } catch (_) { continue; }
-                items.push({ label, href: url });
-            }
+        const raw = { ...(window?.nqaPlaceHolder?.rawValues ?? {}) };
+        try {
+            const inst = await store.getInstance();
+            const prefix = inst && (inst.prefix || inst.name);
+            if (prefix) raw.instance_name = String(prefix);
+        } catch (_) { /* ignore */ }
+        for (const it of cfgs) {
+            const label = (it?.name || it?.label) ?? '';
+            let url = it?.url ?? '';
+            if (!label || !url) continue;
+            try {
+                url = url.replace(/[\r\n]+/g, '');
+                url = url.replace(/\{([^}]+)\}/g, (match, placeholderPattern) => {
+                    const regex = new RegExp('^' + placeholderPattern.replace(/\*/g, '.*') + '$', 'i');
+                    const matchingKey = Object.keys(raw).find(rawKey => regex.test(rawKey));
+                    if (matchingKey) return raw[matchingKey];
+                    return match;
+                });
+            } catch (_) { continue; }
+            items.push({ label, href: url });
         }
         callback(items);
     });

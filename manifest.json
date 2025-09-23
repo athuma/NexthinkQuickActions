@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nexthink Quick Actions",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Allows customization of the Nexthink context menu.",
   "permissions": ["activeTab", "storage"],
   "content_scripts": [
@@ -14,6 +14,7 @@
       ],
       "run_at": "document_idle",
       "js": [
+        "option/lib/instance-utils.js",
         "option/lib/config-store.js",
         "content.js",
         "content-cheatsheet.js"
@@ -32,6 +33,15 @@
       "32": "icons/spark32.png"
     },
     "default_popup": "popup/popup.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+Q",
+        "mac": "Alt+Shift+Q"
+      },
+      "description": "Open the Nexthink Quick Actions popup"
+    }
   },
   "options_ui": {
     "page": "option/options.html",

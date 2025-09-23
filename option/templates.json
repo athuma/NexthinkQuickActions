@@ -1,0 +1,22 @@
+[
+    {
+        "name": "Search device in ServiceNow",
+        "url": "https://{instance_name}.service-now.com/nav_to.do?uri=cmdb_ci_computer_list.do%3Fsysparm_query%3DnameLIKE{devices_name}"
+    },
+    {
+        "name": "Open active incidents in ServiceNow",
+        "url": "https://{instance_name}.service-now.com/nav_to.do?uri=incident_list.do%3Fsysparm_query%3Dactive%253Dtrue%255EstateNOT%2520IN150%252C3%255Ecmdb_ci.name%253D{devices_name}"
+    },
+    {
+        "name": "List all incidents in ServiceNow",
+        "url": "https://{instance_name}.service-now.com/nav_to.do?uri=incident_list.do%3Fsysparm_query%3Dcmdb_ci.name%253D{devices_name}"
+    },
+    {
+        "name": "Search user in ServiceNow",
+        "url": "https://{instance_name}.service-now.com/nav_to.do?uri=sys_user_list.do%3Fsysparm_query%3Dlast_name%253D{*ad_username}"
+    },
+    {
+        "name": "Open device in Jamf Pro",
+        "url": "https://{instance_name}.jamfcloud.com/computers.html?queryType=COMPUTERS&version=&query={devices_name}"
+    }
+]

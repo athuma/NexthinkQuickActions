@@ -27,6 +27,7 @@
       this.draft = { name: '', url: '', rawUrl: null };
       this.touched = { name: false, url: false };
       this.pendingDeleteIndex = null;
+      this.userEntriesAllowed = true;
 
       // UI texts
       this.URL_HELP = this.opts.URL_HELP || 'Example: http(s)://hostname/path{keyword} <br>{keyword} will be replaced by the captured value from the page';
@@ -55,7 +56,7 @@
       const items = itemsOpt || await this.store.getMenu();
       const hasItems = Array.isArray(items) && items.length > 0;
       const isEditing = this.editingIndex !== null;
-      if (this.addBtn) this.addBtn.disabled = isEditing;
+      this._syncAddDisabled(isEditing);
       if (this.empty) this.empty.hidden = !!hasItems || isEditing;
       if (this.table) this.table.style.display = (!hasItems && !isEditing) ? 'none' : '';
       if (!hasItems && !isEditing) {
@@ -65,9 +66,10 @@
       const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&','<':'&lt;','>':'&gt;'}[c]));
       const rows = items.map((it, idx) => {
         if (this.editingIndex === idx) return this._buildEditRow(`e${idx}`, idx);
+        const locked = !!it?.__locked;
+        if (locked) return this._buildLockedRow(it, idx);
         const name = esc(it?.name || '');
         const url = esc(this.decodeForDisplay(it?.url || ''));
-        const locked = !!it?.__locked;
         const isFirst = idx === 0; const isLast = idx === (items.length - 1);
         return `<tr data-index="${idx}">
           <td>${name}</td>
@@ -108,7 +110,46 @@
 </tr>`);
     }
 
+    _buildLockedRow(item, idx){
+      const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&','<':'&lt;','>':'&gt;'}[c]));
+      const name = esc(item?.name || '');
+      const url = esc(this.decodeForDisplay(item?.url || ''));
+      return (
+`<tr data-index="${idx}" data-locked="true">
+  <td>${name}</td>
+  <td><div style="word-wrap:break-word;">${url}</div></td>
+  <td class="actions locked" title="Managed by your organization">
+    <span class="lock-indicator">
+      <span class="mask-icon icon-lock" aria-hidden="true"></span>
+      <span class="sr-only">Managed by your organization</span>
+    </span>
+  </td>
+</tr>`);
+    }
+
+    setUserEntriesAllowed(flag){
+      const next = (flag !== false);
+      if (this.userEntriesAllowed === next) {
+        this._syncAddDisabled(this.editingIndex !== null);
+        return;
+      }
+      this.userEntriesAllowed = next;
+      if (!this.userEntriesAllowed && this.editingIndex === -1) {
+        this.editingIndex = null;
+        this.touched = { name: false, url: false };
+        return this.render();
+      }
+      this._syncAddDisabled(this.editingIndex !== null);
+    }
+
+    _syncAddDisabled(isEditing){
+      if (!this.addBtn) return;
+      const disable = !!isEditing || !this.userEntriesAllowed;
+      this.addBtn.disabled = disable;
+    }
+
     async _onAdd(){
+      if (!this.userEntriesAllowed) return;
       this.editingIndex = -1;
       this.draft = { name: '', url: '', rawUrl: null };
       this.touched = { name: false, url: false };

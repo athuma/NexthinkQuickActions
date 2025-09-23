@@ -29,6 +29,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const importBtn = document.getElementById('importBtn');
   const exportBtn = document.getElementById('exportBtn');
   const importFile = document.getElementById('importFile');
+  const templateBtn = document.getElementById('templateBtn');
+  const templateModal = document.getElementById('templateModal');
+  const templateList = document.getElementById('templateList');
+  const templateCancelBtn = document.getElementById('templateCancelBtn');
+  const templateAddBtn = document.getElementById('templateAddBtn');
   // Import modal elements
   const importModal = document.getElementById('importModal');
   const importSummary = document.getElementById('importSummary');
@@ -47,17 +52,109 @@ document.addEventListener('DOMContentLoaded', () => {
   // Instance modal elements
   const instanceModal = document.getElementById('instanceModal');
   const instanceDialog = document.querySelector('#instanceModal .modal-dialog');
-  const instNameInput = document.getElementById('instNameInput');
-  const instUrlInput = document.getElementById('instUrlInput');
-  const instNameErr = document.getElementById('instNameErr');
-  const instUrlErr = document.getElementById('instUrlErr');
+  const instPrefixInput = document.getElementById('instPrefixInput');
+  const instRegionSelect = document.getElementById('instRegionSelect');
+  const instPrefixErr = document.getElementById('instPrefixErr');
+  const instPreviewUrl = document.getElementById('instPreviewUrl');
+  const instCopyUrlBtn = document.getElementById('instCopyUrlBtn');
+  const instCopyPlaceholderBtn = document.getElementById('instCopyPlaceholderBtn');
+  const instPlaceholderToken = document.getElementById('instPlaceholderToken');
+  const instPlaceholderValue = document.getElementById('instPlaceholderValue');
   const instCancelBtn = document.getElementById('instCancelBtn');
   const instSaveBtn = document.getElementById('instSaveBtn');
   // legacy instance edit state removed (handled by NqaInstanceSection)
 
   // Centralized copy for help/errors
-  const URL_HELP = 'Example: http(s)://hostname/path{keyword} <br>{keyword} is a column name and will be replaced by the captured value from the investigation<br>{*keyword} will match the first column name ending with keyword';
+  const URL_HELP = 'Example: http(s)://hostname/path{keyword} <br>{keyword} is a column name and will be replaced by the captured value from the investigation<br>{*keyword} will match the first column name ending with keyword<br>Use {instance_name} to inject the configured tenant prefix';
   const URL_ERR_INVALID = 'Invalid URL';
+
+  const TEMPLATE_SOURCE = chrome.runtime.getURL('option/templates.json');
+  const templateState = {
+    loaded: false,
+    templates: [],
+    selected: new Set(),
+  };
+
+  const escapeHtml = (str) => String(str ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+  const updateTemplateAddDisabled = () => {
+    if (templateAddBtn) templateAddBtn.disabled = (templateState.selected.size === 0);
+  };
+
+  const resetTemplateSelection = () => {
+    templateState.selected.clear();
+    updateTemplateAddDisabled();
+  };
+
+  const hideTemplateModal = () => {
+    try { if (templateModal) templateModal.hidden = true; } catch (_) {}
+    resetTemplateSelection();
+  };
+
+  const renderTemplateList = () => {
+    if (!templateList) return;
+    if (!templateState.templates.length) {
+      templateList.innerHTML = '<div class="template-list-empty">No templates available.</div>';
+      return;
+    }
+    const items = templateState.templates.map((tpl, idx) => {
+      const name = escapeHtml(tpl?.name || `Template ${idx + 1}`);
+      const title = escapeHtml(tpl?.url || '');
+      return `<label class="template-item" title="${title}">
+        <input type="checkbox" data-index="${idx}" />
+        <span class="template-name">${name}</span>
+      </label>`;
+    });
+    templateList.innerHTML = items.join('');
+    resetTemplateSelection();
+  };
+
+  const ensureTemplatesLoaded = async () => {
+    if (templateState.loaded) return;
+    try {
+      const resp = await fetch(TEMPLATE_SOURCE);
+      if (!resp.ok) throw new Error('Failed to load templates');
+      const data = await resp.json();
+      if (Array.isArray(data)) {
+        templateState.templates = data.filter((tpl) => tpl && tpl.name && tpl.url);
+      } else {
+        templateState.templates = [];
+      }
+    } catch (_) {
+      templateState.templates = [];
+    } finally {
+      templateState.loaded = true;
+    }
+  };
+
+  const openTemplateModal = async () => {
+    if (!templateModal || !templateBtn || templateBtn.disabled) return;
+    await ensureTemplatesLoaded();
+    renderTemplateList();
+    templateModal.hidden = false;
+    setTimeout(() => {
+      try { templateModal.querySelector('input[type="checkbox"]').focus(); } catch (_) {}
+    }, 0);
+  };
+
+  const applySelectedTemplates = async () => {
+    if (!templateState.selected.size) { hideTemplateModal(); return; }
+    const templates = Array.from(templateState.selected)
+      .map((idx) => templateState.templates[idx])
+      .filter((tpl) => tpl && tpl.name && tpl.url);
+    if (!templates.length) { hideTemplateModal(); return; }
+    try {
+      const current = await getMenu();
+      const next = Array.isArray(current) ? current.slice() : [];
+      templates.forEach((tpl) => {
+        const entry = { name: tpl.name, url: tpl.url };
+        if (window.NqaConfigStore.isValidMenuItem(entry)) next.push(entry);
+      });
+      await setMenu(next);
+      try { (window.__nqaMenuController)?.render?.(); } catch (_) {}
+    } catch (_) { /* ignore */ }
+    hideTemplateModal();
+  };
 
   // Decode percent-encoded strings for display (handles double-encoding like %253D)
   const decodeForDisplay = (val) => {
@@ -168,6 +265,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const setTemplateButtonEnabled = (flag) => {
+    if (templateBtn) {
+      templateBtn.disabled = !flag;
+    }
+    if (!flag) hideTemplateModal();
+  };
+
   // Use shared storage class (mandatory)
   const store = new window.NqaConfigStore();
   const getMenu = () => store.getMenu();
@@ -176,6 +280,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const setInstance = (inst) => store.setInstance(inst);
 
   // Icons rendered via CSS masks; no runtime URL required
+
+  if (templateBtn) templateBtn.addEventListener('click', () => openTemplateModal());
+  if (templateCancelBtn) templateCancelBtn.addEventListener('click', () => hideTemplateModal());
+  if (templateAddBtn) templateAddBtn.addEventListener('click', () => applySelectedTemplates());
+  if (templateList) templateList.addEventListener('change', (ev) => {
+    const checkbox = ev.target && ev.target.closest && ev.target.closest('input[type="checkbox"]');
+    if (!checkbox) return;
+    const idx = Number(checkbox.getAttribute('data-index'));
+    if (Number.isNaN(idx)) return;
+    if (checkbox.checked) templateState.selected.add(idx);
+    else templateState.selected.delete(idx);
+    updateTemplateAddDisabled();
+  });
+
+  setTemplateButtonEnabled(true);
 
   // Instantiate Menu Entries controller
   try {
@@ -216,9 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
               if (managed.instance && window.NqaConfigStore.isValidInstance(managed.instance)) await store.setInstance(managed.instance);
             }
           } catch (_) {}
+          if (typeof menuController?.setUserEntriesAllowed === 'function') await menuController.setUserEntriesAllowed(true);
+          setTemplateButtonEnabled(true);
         } else {
-          // Overlay: disable Add if user entries are not allowed
-          if (pol.allowUserEntries === false && addBtn) addBtn.disabled = true;
+          const allowUsers = pol.allowUserEntries !== false;
+          if (typeof menuController?.setUserEntriesAllowed === 'function') await menuController.setUserEntriesAllowed(allowUsers);
+          else if (addBtn) addBtn.disabled = !allowUsers;
+          setTemplateButtonEnabled(allowUsers);
         }
       } catch (_) {}
       // Initial render (after potential seed/disable)
@@ -238,10 +361,14 @@ document.addEventListener('DOMContentLoaded', () => {
         addBtn: instAddBtn,
         modal: instanceModal,
         dialog: instanceDialog,
-        nameInput: instNameInput,
-        urlInput: instUrlInput,
-        nameErr: instNameErr,
-        urlErr: instUrlErr,
+        prefixInput: instPrefixInput,
+        regionSelect: instRegionSelect,
+        prefixErr: instPrefixErr,
+        previewUrl: instPreviewUrl,
+        copyUrlBtn: instCopyUrlBtn,
+        copyPlaceholderBtn: instCopyPlaceholderBtn,
+        placeholderEl: instPlaceholderToken,
+        placeholderValue: instPlaceholderValue,
         cancelBtn: instCancelBtn,
         saveBtn: instSaveBtn,
         deleteModal,
@@ -251,7 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteConfirmBtn,
       },
       store,
-      isValidInstanceUrl,
     });
     instanceController.attach();
     // Render once and on storage changes
@@ -294,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try { deleteModal.hidden = true; } catch (_) {}
         if (deleteDialog) { deleteDialog.style.position = ''; deleteDialog.style.left = ''; deleteDialog.style.top = ''; }
       }
+      if (templateModal && !templateModal.hidden) hideTemplateModal();
     }
   });
 

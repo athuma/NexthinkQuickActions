@@ -12,8 +12,8 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 ## Configuration workflow
 ### Accessing the options page
 - From the browser toolbar popup, click the cog icon (or `Add Nexthink instance`) to open `option/options.html`.
-- The first section stores the Nexthink **Instance** (name + base URL without path). The table stays hidden until an instance exists. Only `https://host` or `http://host` formats are accepted—trailing slashes, paths, query strings, and hashes are rejected.
-- The **Quick Actions** section maintains the menu entries consumed by the content script. Each entry is a name and a URL template that must contain at least one placeholder such as `{devices_name}` or `{*full_name}`.
+- The first section stores the Nexthink **Instance** via a guided builder: provide the tenant prefix and select the Nexthink region, and the UI composes `https://<tenant>.<region>.nexthink.cloud`. The preview also shows `{instance_name}` alongside the resolved prefix so authors can copy both pieces easily.
+- The **Quick Actions** section maintains the menu entries consumed by the content script. Each entry is a name and a URL template that must contain at least one placeholder such as `{devices_name}`, `{*full_name}` or the tenant token `{instance_name}`.
 
 ### Editing quick actions
 - Click **Add** to create a new row or the pencil icon to edit an existing one. Rows can be reordered with the up/down arrows; managed entries show the lock state and disable editing when policies require it.
@@ -36,7 +36,8 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - Policies accept two modes:
   - **Overlay** (default): managed entries are merged into the user list. Flags `allowUserEntries` and `lockManagedEntries` control whether users may add/edit their own entries.
   - **Seed**: managed data seeds the user profile once. With `seedReplace=true`, it overwrites any existing configuration on first load.
-- For Chrome Enterprise or macOS deployment, adapt `debug/NQA_Chrome_Managed.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance and menu under `ExtensionSettings`.
+- For Chrome Enterprise or macOS deployment, adapt `MobileProfiles/NQA_Chrome_Managed.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance and menu under `ExtensionSettings`.
+- See the [managed policy behaviour matrix](docs/managed-policy-matrix.md) for detailed combinations and their impact on end users.
 
 ## Runtime behaviour in Nexthink
 ### Quick Actions submenu
@@ -58,6 +59,7 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
   - When configured, the form accepts a device name and opens Device View at `/sup/device/search/{query}` in a new tab.
   - When no instance is found, the popup shows a call-to-action that opens the options page.
 - Storage listeners update the popup live after changes in the options page.
+- A global shortcut (`Alt+Shift+Q` by défaut sur Windows et macOS) ouvre aussi le popup et peut être ajusté via `chrome://extensions/shortcuts`.
 
 ## Project layout
 - `manifest.json` – entry point (MV3) declaring content scripts, popup, options page, and managed schema.
@@ -77,4 +79,3 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - If the submenu does not appear, confirm that the column you are using has a matching placeholder in your URL template. The cheat-sheet panel shows the exact keys the script detects.
 - Managed policies override user settings depending on the chosen mode. Inspect `chrome://policy` to verify the payload applied by your organization.
 - The options page surfaces validation errors inline (invalid URLs, missing placeholders). Correct them before saving.
-

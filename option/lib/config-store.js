@@ -59,6 +59,49 @@
     try { chrome.storage.managed.get(null, (res) => resolve(res || {})); } catch (_) { resolve({}); }
   });
 
+  const InstanceUtils = global.NqaInstanceUtils;
+  if (!InstanceUtils) {
+    throw new Error('NqaInstanceUtils not loaded — ensure option/lib/instance-utils.js is included before config-store.js');
+  }
+  const { sanitizePrefix, isValidRegion, derivePrefixFromUrl, deriveRegionFromUrl } = InstanceUtils;
+
+  // Minimal sanitization: ensure we have name + url and normalize optional prefix/region fields
+  const sanitizeInstance = (inst) => {
+    if (!inst || typeof inst !== 'object') return null;
+    const name = String(inst.name || inst.prefix || '').trim();
+    const url = String(inst.url || '').trim();
+    if (!name || !url) return null;
+    const out = { name, url };
+    const prefixSource = inst.prefix || derivePrefixFromUrl(url) || name;
+    const prefix = sanitizePrefix(prefixSource);
+    if (prefix) out.prefix = prefix;
+    const regionRaw = String(inst.region || '').trim().toLowerCase();
+    if (isValidRegion(regionRaw)) out.region = regionRaw;
+    return out;
+  };
+
+  // Enrich instance with derived prefix/region/name so downstream consumers always have a coherent model
+  const augmentInstance = (inst) => {
+    if (!inst) return inst;
+    const clone = { ...inst };
+    if (clone.prefix) clone.prefix = sanitizePrefix(clone.prefix);
+    if (!clone.prefix && clone.name) clone.prefix = sanitizePrefix(clone.name);
+    if (!clone.name && clone.prefix) clone.name = clone.prefix;
+    if (!clone.region || !isValidRegion(clone.region)) {
+      const derivedRegion = deriveRegionFromUrl(clone.url);
+      if (derivedRegion) clone.region = derivedRegion;
+      else delete clone.region;
+    }
+    if (!clone.prefix && clone.url) {
+      const derivedPrefix = derivePrefixFromUrl(clone.url);
+      if (derivedPrefix) {
+        clone.prefix = derivedPrefix;
+        if (!clone.name) clone.name = derivedPrefix;
+      }
+    }
+    return clone;
+  };
+
   class NqaConfigStore {
     // Static constants (defined at the top of the class)
     static VERSION = getExtensionVersion();   // current model/storage version
@@ -118,12 +161,25 @@
       const pol = await this.getManagedPolicy(managed);
       if (pol.mode !== 'seed') {
         const inst = managed?.instance;
-        if (inst && NqaConfigStore.isValidInstance(inst)) return inst;
+        if (inst && NqaConfigStore.isValidInstance(inst)) {
+          const clean = augmentInstance(sanitizeInstance(inst));
+          if (clean) {
+            return {
+              ...clean,
+              __managed: true,
+              __locked: !!pol.lockManagedEntries,
+            };
+          }
+        }
       }
       const def = { [NqaConfigStore.KEYS.INSTANCE]: { instance: null } };
       const res = await promisifyGet(def);
       const inst = res?.[NqaConfigStore.KEYS.INSTANCE]?.instance ?? null;
-      return inst && NqaConfigStore.isValidInstance(inst) ? inst : null;
+      if (inst && NqaConfigStore.isValidInstance(inst)) {
+        const clean = augmentInstance(sanitizeInstance(inst));
+        return clean || null;
+      }
+      return null;
     }
 
     // Write API
@@ -133,7 +189,7 @@
       await this.ensureStorageVersion();
     }
     async setInstance(inst) {
-      const payload = (inst && NqaConfigStore.isValidInstance(inst)) ? inst : null;
+      const payload = (inst && NqaConfigStore.isValidInstance(inst)) ? augmentInstance(sanitizeInstance(inst)) : null;
       await promisifySet({ [NqaConfigStore.KEYS.INSTANCE]: { instance: payload } });
       await this.ensureStorageVersion();
     }
@@ -195,7 +251,8 @@
       const menu = await this.getMenu();
       const instance = await this.getInstance();
       const version = await this.getStorageVersion();
-      return { menu, instance: (instance || null), version };
+      const plainInstance = instance ? augmentInstance(sanitizeInstance(instance)) : null;
+      return { menu, instance: plainInstance, version };
     }
 
     // Trigger a download of the exported configuration

@@ -1,17 +1,26 @@
 (function () {
   'use strict';
 
-  function isInvestigations() {
+  function getPageContext() {
     try {
       if (typeof detectPageContext === 'function') {
         const ctx = detectPageContext();
-        if (ctx === 'Investigations') return true;
+        if (ctx) return ctx;
       }
-      // Fallback: read header h2 text if available
+    } catch (_) { /* ignore */ }
+    try {
       const h2 = document.querySelector('header h2');
       const t = (h2?.textContent || '').trim();
-      return /\bInvestigations\b/i.test(t);
-    } catch (_) { return false; }
+      if (!t) return '';
+      if (/\bInvestigations\b/i.test(t)) return 'Investigations';
+      if (/\bDevice\s*View\b/i.test(t)) return 'Device View';
+      return t;
+    } catch (_) { return ''; }
+  }
+
+  function isSupportedPage(ctx) {
+    const kind = ctx || getPageContext();
+    return kind === 'Investigations' || kind === 'Device View';
   }
 
   function selectHeaderNodes() {
@@ -102,6 +111,48 @@
     } catch (_) {}
   }
 
+  const DEVICE_VIEW_PLACEHOLDERS = [
+    { label: 'Device name', key: 'devices_name' },
+    { label: 'Login name', key: 'login_name' },
+    { label: 'Full name', key: 'full_name' },
+    { label: 'AD name', key: 'ad_name' }
+  ];
+
+  function appendPlaceholderRow(list, label, key, value) {
+    const safeKey = String(key || '').trim();
+    if (!safeKey) return false;
+    const safeLabel = (label || '').trim() || safeKey;
+    const placeholder = `{${safeKey}}`;
+    const row = document.createElement('div'); row.className = 'nqa-row';
+    const lab = document.createElement('div'); lab.className = 'nqa-label'; lab.textContent = safeLabel;
+    const val = document.createElement('div'); val.className = 'nqa-key'; val.textContent = placeholder;
+    const btn = document.createElement('button'); btn.className = 'nqa-copy'; btn.type = 'button'; btn.title = `Copier ${placeholder}`; btn.textContent = 'Copier';
+    const handleCopy = () => copy(placeholder);
+    btn.addEventListener('click', handleCopy);
+    val.addEventListener('click', handleCopy);
+    try { val.title = value ? String(value) : placeholder; } catch (_) {}
+    row.appendChild(lab); row.appendChild(val); row.appendChild(btn);
+    list.appendChild(row);
+    return true;
+  }
+
+  function populateDeviceView(list) {
+    let count = 0;
+    let raw = {};
+    try {
+      if (typeof buildDeviceViewPlaceholder === 'function') {
+        const obj = buildDeviceViewPlaceholder();
+        raw = (obj && obj.rawValues) || {};
+      }
+    } catch (_) { raw = {}; }
+    DEVICE_VIEW_PLACEHOLDERS.forEach(({ label, key }) => {
+      if (appendPlaceholderRow(list, label, key, raw[key])) {
+        count++;
+      }
+    });
+    return count;
+  }
+
   function injectToggleIntoMenubar() {
     try {
       // There can be multiple menubar ULs; pick the correct one.
@@ -175,38 +226,36 @@
     return wrap;
   }
 
-  function populate() {
+  function populate(context) {
     try {
       const panel = document.getElementById('nqa-cheatsheet'); if (!panel) return;
       const list = panel.querySelector('.nqa-list'); if (!list) return;
       list.innerHTML = '';
-      const nodes = selectHeaderNodes();
+      const ctx = context || getPageContext();
       let count = 0;
-      nodes.forEach((el) => {
-        const label = getLabelText(el);
-        const key = (typeof normalizeColumnKey === 'function') ? normalizeColumnKey(label) : label;
-        if (!key) return;
-        const row = document.createElement('div'); row.className = 'nqa-row';
-        const lab = document.createElement('div'); lab.className = 'nqa-label'; lab.textContent = label;
-        const val = document.createElement('div'); val.className = 'nqa-key'; val.textContent = `{${key}}`;
-        const btn = document.createElement('button'); btn.className = 'nqa-copy'; btn.type = 'button'; btn.title = `Copier {${key}}`; btn.textContent = 'Copier';
-        btn.addEventListener('click', () => copy(`{${key}}`));
-        val.addEventListener('click', () => copy(`{${key}}`));
-        row.appendChild(lab); row.appendChild(val); row.appendChild(btn);
-        list.appendChild(row); count++;
-      });
+      if (ctx === 'Device View') {
+        count = populateDeviceView(list);
+      } else {
+        const nodes = selectHeaderNodes();
+        nodes.forEach((el) => {
+          const label = getLabelText(el);
+          const key = (typeof normalizeColumnKey === 'function') ? normalizeColumnKey(label) : label;
+          if (appendPlaceholderRow(list, label, key)) count++;
+        });
+      }
       if (count === 0) {
         const info = document.createElement('div'); info.style.padding='8px 12px'; info.textContent = 'Aucune colonne détectée.'; list.appendChild(info);
       }
     } catch (_) {}
   }
 
-  function mount() {
-    if (!isInvestigations()) return;
+  function mount(context) {
+    const ctx = context || getPageContext();
+    if (!isSupportedPage(ctx)) return false;
     ensureStyles();
     // Toggle entry in menubar (single target app, no fallback)
     const toggle = injectToggleIntoMenubar();
-    if (!toggle) return; // do nothing if menu not available
+    if (!toggle) return false; // do nothing if menu not available
     // Panel
     let panel = document.getElementById('nqa-cheatsheet');
     if (!panel) {
@@ -214,12 +263,15 @@
       panel.hidden = true;
       document.body.appendChild(panel);
     }
-    populate();
+    populate(ctx);
     setMenuIconActive(toggle, !panel.hidden);
+    if (toggle.dataset.nqaCheatsheetInit === '1') return true;
+
+    toggle.dataset.nqaCheatsheetInit = '1';
     toggle.onclick = (ev) => {
       try { ev && ev.preventDefault && ev.preventDefault(); } catch (_) {}
       panel.hidden = !panel.hidden;
-      if (!panel.hidden) populate();
+      if (!panel.hidden) populate(getPageContext());
       setMenuIconActive(toggle, !panel.hidden);
     };
 
@@ -228,7 +280,7 @@
     const schedulePopulate = () => {
       if (populateScheduled) return;
       populateScheduled = true;
-      setTimeout(() => { try { if (!panel.hidden) populate(); } finally { populateScheduled = false; } }, 150);
+      setTimeout(() => { try { if (!panel.hidden) populate(getPageContext()); } finally { populateScheduled = false; } }, 150);
     };
     const mo = new MutationObserver((muts) => {
       if (panel.hidden) return;
@@ -247,11 +299,17 @@
       }
     });
     try { mo.observe(document.body, { childList: true, subtree: true }); } catch (_) {}
+    toggle.__nqaCheatsheetObserver = mo;
+    return true;
   }
 
-  // Defer mounting until page is ready and context is Investigations (SPA safe)
+  // Defer mounting until page is ready and a supported context is detected (SPA safe)
   function scheduleMount() {
-    const tryNow = () => { if (isInvestigations()) { mount(); return true; } return false; };
+    const tryNow = () => {
+      const ctx = getPageContext();
+      if (!isSupportedPage(ctx)) return false;
+      return mount(ctx);
+    };
     // If already ok, mount now
     if (tryNow()) return;
     // Wait for DOM ready
