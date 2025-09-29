@@ -4,3 +4,5 @@ remote-debug-profile
 photoshop
 .vscode
 debug
+reports
+node_modules

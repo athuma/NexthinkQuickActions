@@ -54,6 +54,13 @@
     try { SYNC.set(obj, resolve); } catch (_) { resolve(); }
   });
 
+  const DEFAULT_EXPORT_PREFS = {
+    csvDelimiter: ',',
+    clipboardFormat: 'markdown',
+  };
+
+  const VALID_CLIPBOARD_FORMATS = new Set(['markdown', 'ascii', 'html', 'tsv']);
+
   // Read all managed policies (read-only). Returns {} if none or not available
   const getManagedAll = () => new Promise((resolve) => {
     try { chrome.storage.managed.get(null, (res) => resolve(res || {})); } catch (_) { resolve({}); }
@@ -106,8 +113,9 @@
     // Static constants (defined at the top of the class)
     static VERSION = getExtensionVersion();   // current model/storage version
     static VERSION_KEY = 'version';          // single, global storage version key
-    static KEYS = { MENU: 'menu', INSTANCE: 'instance' };
+    static KEYS = { MENU: 'menu', INSTANCE: 'instance', EXPORT: 'exportPrefs' };
     static DEFAULT_EXPORT_FILENAME = 'NQA_Configuration.json';
+    static DEFAULT_EXPORT_PREFS = DEFAULT_EXPORT_PREFS;
 
     // Validation helpers
     static isValidMenuItem(it) {
@@ -128,6 +136,20 @@
         if (!(u.protocol === 'http:' || u.protocol === 'https:')) return false;
         return !!u.hostname;
       } catch (_) { return false; }
+    }
+
+    static sanitizeExportPrefs(prefs) {
+      const base = { ...DEFAULT_EXPORT_PREFS };
+      if (!prefs || typeof prefs !== 'object') return base;
+      const rawDelimiter = String(prefs.csvDelimiter ?? '').trim();
+      if (rawDelimiter) {
+        base.csvDelimiter = rawDelimiter.slice(0, 3);
+      }
+      const rawFormat = String(prefs.clipboardFormat ?? '').trim().toLowerCase();
+      if (VALID_CLIPBOARD_FORMATS.has(rawFormat)) {
+        base.clipboardFormat = rawFormat;
+      }
+      return base;
     }
 
     // Read API
@@ -250,9 +272,10 @@
     async exportAsObject() {
       const menu = await this.getMenu();
       const instance = await this.getInstance();
+      const exportPrefs = await this.getExportPrefs();
       const version = await this.getStorageVersion();
       const plainInstance = instance ? augmentInstance(sanitizeInstance(instance)) : null;
-      return { menu, instance: plainInstance, version };
+      return { menu, instance: plainInstance, exportPrefs, version };
     }
 
     // Trigger a download of the exported configuration
@@ -307,14 +330,30 @@
         else instance = undefined; // ignore invalid instance
       }
 
+      let exportPrefs = undefined;
+      if (Object.prototype.hasOwnProperty.call(obj, 'exportPrefs')) {
+        try {
+          exportPrefs = NqaConfigStore.sanitizeExportPrefs(obj.exportPrefs);
+        } catch (_) {
+          exportPrefs = undefined;
+        }
+      }
+
       if (validateOnly) {
-        return { ok: true, counts: { menu: menu.length }, hasInstance: (instance !== undefined), mode };
+        return {
+          ok: true,
+          counts: { menu: menu.length },
+          hasInstance: (instance !== undefined),
+          hasExportPrefs: (exportPrefs !== undefined),
+          mode,
+        };
       }
 
       // Apply
       if (mode === 'replace') {
         await this.setMenu(menu);
         if (instance !== undefined) await this.setInstance(instance);
+        if (exportPrefs !== undefined) await this.setExportPrefs(exportPrefs);
       } else {
         // add
         const existing = await this.getMenu();
@@ -323,12 +362,33 @@
           const cur = await this.getInstance();
           if (!cur && instance) await this.setInstance(instance);
         }
+        if (exportPrefs !== undefined) await this.setExportPrefs(exportPrefs);
       }
 
       // Align stored version to current extension version after import
       await this.ensureStorageVersion();
 
-      return { ok: true, counts: { menu: menu.length }, appliedInstance: instance !== undefined };
+      return {
+        ok: true,
+        counts: { menu: menu.length },
+        appliedInstance: instance !== undefined,
+        appliedExportPrefs: exportPrefs !== undefined,
+      };
+    }
+
+    async getExportPrefs() {
+      await this.ensureAndMigrateStorage();
+      const def = { [NqaConfigStore.KEYS.EXPORT]: DEFAULT_EXPORT_PREFS };
+      const res = await promisifyGet(def);
+      const raw = res?.[NqaConfigStore.KEYS.EXPORT];
+      return NqaConfigStore.sanitizeExportPrefs(raw);
+    }
+
+    async setExportPrefs(prefs) {
+      const clean = NqaConfigStore.sanitizeExportPrefs(prefs);
+      await promisifySet({ [NqaConfigStore.KEYS.EXPORT]: clean });
+      await this.ensureStorageVersion();
+      return clean;
     }
   }
 

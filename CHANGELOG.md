@@ -1,5 +1,10 @@
 # Changelog
 
+- Feat: Added a selection export feature with two delivery modes: downloadable CSV (configurable delimiter) and clipboard copy (Markdown, ASCII, HTML).
+- Fix: Limited Quick Actions menu injection to the Device View header kebabs to avoid duplicating entries elsewhere.
+- Fix: Moved the "Add menu" button inside the Quick Action menu section so it aligns with the Nexthink instance layout.
+- Docs: Expanded documentation (README/Usage) with extract feature details, project layout notes, ASCII font guidance, updated Workday example.
+
 ## v1.0.1
 
 - Reworked instance editor with tenant prefix + region picker, live URL preview, and exposed `{instance_name}` token.
@@ -13,4 +18,3 @@
 ## v1.0.0
 
 - Initial public release.
-

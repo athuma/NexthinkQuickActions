@@ -6,7 +6,8 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - **Context menu quick actions** – injects a "Quick Actions" submenu in Nexthink kebab menus (Device View and Investigations). Entries open new tabs using placeholders that are resolved from the selected row.
 - **Browser action popup** – provides a compact launcher that jumps directly to Device View for a device name, with a shortcut to the settings page when the instance is not yet configured.
 - **Cheat-sheet toggle** – adds a QuickAction icon to the Nexthink top menubar that reveals a panel listing all detected column placeholders, with one-click copy to help authors build URLs.
-- **Friendly configuration surface** – an options page to maintain the Nexthink instance URL, manage quick action rows, reorder entries, and import/export JSON bundles.
+- **Friendly configuration surface** – an options page to maintain the Nexthink instance URL, manage quick action rows, reorder entries, tune export preferences, and import/export JSON bundles.
+- **Investigation export helpers** – augments the bulk-selection toolbar with NQA-branded actions to copy selected rows (Markdown, ASCII, or HTML) or download a CSV using your preferred separator.
 - **Policy-driven deployment** – supports Chrome managed storage, including overlay vs seed modes, so administrators can pre-load and lock menus or instance settings. Sample payloads are available in `debug/`.
 
 ## Configuration workflow
@@ -16,11 +17,12 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - The **Quick Actions** section maintains the menu entries consumed by the content script. Each entry is a name and a URL template that must contain at least one placeholder such as `{devices_name}`, `{*full_name}` or the tenant token `{instance_name}`.
 
 ### Editing quick actions
-- Click **Add** to create a new row or the pencil icon to edit an existing one. Rows can be reordered with the up/down arrows; managed entries show the lock state and disable editing when policies require it.
+- Click **Add entry** to create a new row or the pencil icon to edit an existing one. Rows can be reordered with the up/down arrows; managed entries show the lock state and disable editing when policies require it.
 - URL templates accept multi-line input for readability; line breaks are stripped before injection.
 - The helper text explains the placeholder syntax. Validation ensures the template is `http(s)://` and contains at least one `{placeholder}` token. Wildcards (`*`) inside placeholders act as glob-like patterns matched against captured column keys.
 
-### Import/export and JSON format
+### Export settings, import/export, and JSON format
+- Use the *Export settings* card to choose the CSV separator used during downloads and the clipboard format (`Markdown`, `ASCII table`, or `HTML table`) applied when copying selections from Investigations.
 - Use the toolbar buttons to export the current dataset to `NQA_Configuration.json` or import another JSON document. The modal lets you **Add** (append) or **Replace** the existing menu, and optionally override the instance when provided.
 - The expected structure matches `debug/NQA_Configuration+wildcard.json`:
   ```json
@@ -44,6 +46,13 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - The content script (`content.js`) observes Nexthink menus to locate kebab action panels on Device View and Investigations screens.
 - When a menu opens, the script resolves the controlling row/button, extracts the currently selected column (`window.nqaPlaceHolder.columnName`), filters configured entries for matching placeholders, and injects a native-looking submenu.
 - Clicking a quick action opens the resolved URL in a new tab. The submenu closes automatically and tracks focus state so multiple menus cannot overlap.
+- The submenu header now displays the Nexthink Spark icon between separators to clearly distinguish native actions from extension-provided entries.
+
+### Selection export shortcuts
+- When rows are selected in Investigations, the Nexthink selection toolbar is enhanced with the Spark icon followed by **Copy selection** and **Download CSV**.
+- The copy action respects the clipboard format defined in the options page, while the CSV action uses the configured delimiter.
+- Toast notifications confirm the number of exported rows and signal when the limit (default 200) truncates the selection.
+- When using the ASCII clipboard format, paste into a monospaced font (Courier, Consolas, Monaco, Menlo, etc.) to preserve the table grid. Choose the HTML table format when pasting into rich-text clients such as Outlook.
 
 ### Placeholder resolution
 - During injection, placeholders such as `{devices_name}` or wildcard forms like `{*full_name}` are replaced with the values exposed by `window.nqaPlaceHolder.rawValues`.
@@ -63,15 +72,17 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 
 ## Project layout
 - `manifest.json` – entry point (MV3) declaring content scripts, popup, options page, and managed schema.
+- `option/` – options experience assets (HTML, CSS, dialogs)
 - `option/lib/` – reusable controllers for the options UI (`config-store`, `menu-entries-controller`, `instance-section`, `import-export-toolbar`).
 - `content.js` – main injector for row menus and submenu creation.
 - `content-cheatsheet.js` – Investigations placeholder helper + menu toggle.
 - `popup/` – browser action markup, styles, and logic.
-- `debug/` – sample managed payloads and reference HTML assets.
+- `icons/` – Spark logos and extension icons referenced by the manifest and injected menus.
+- `docs/` – supplementary documentation (policy behaviour matrix, deployment guidance, etc.).
 
 ## Getting started
 1. Load the folder as an unpacked extension in Chrome/Edge (`chrome://extensions` → Developer mode → Load unpacked).
-2. Configure the Nexthink instance and quick actions via the options page, or import the sample JSON from `debug/`.
+2. Configure the Nexthink instance and quick actions via the options page, or use the **Templates** button to bootstrap a few example entries.
 3. Open a Nexthink Device View or Investigation, trigger the kebab menu, and use the "Quick Actions" submenu to launch downstream tools.
 4. Use the QuickAction toggle in the menubar to review available placeholders while authoring new links.
 

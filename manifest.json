@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Nexthink Quick Actions",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Allows customization of the Nexthink context menu.",
   "permissions": ["activeTab", "storage"],
   "content_scripts": [
@@ -16,6 +16,7 @@
       "js": [
         "option/lib/instance-utils.js",
         "option/lib/config-store.js",
+        "content-export.js",
         "content.js",
         "content-cheatsheet.js"
       ]

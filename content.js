@@ -1,6 +1,12 @@
 // Configuration
 const INJECTED_ATTR = "data-sn-injected-item";
 const INVESTIGATION_COLUMN_SELECTOR = 'table[role="presentation"] th[rowspan="1"] div[class*="LinesEllipsis"]';
+const INVESTIGATION_TABLE_SELECTOR = 'table[role="presentation"]';
+const SELECTION_CHECKBOX_SELECTOR = "input[type='checkbox']";
+const SELECTION_MENU_ATTR = 'data-nqa-export-menu';
+const SELECTION_BUTTON_ATTR = 'data-nqa-export-action';
+const SELECTION_FALLBACK_ID = 'nqa-export-floating-bar';
+const SELECTION_ACTION_STYLE_ID = 'nqa-export-action-style';
 let currentSubmenuTrigger = null; // track open submenu trigger for toggle
 let cleanupFn = null; // cleanup for global listeners
 
@@ -561,6 +567,7 @@ function showCustomSubmenu(triggerEl, items) {
     };
 }
 
+// Reset the injected submenu (and cleanup listeners) when the user leaves the menu.
 function hideCustomSubmenu() {
     const wrap = document.getElementById('nca-custom-submenu-wrap');
     if (wrap && wrap.parentNode) {
@@ -719,51 +726,6 @@ function getNqaColumnNameFromKebab(rootMenuEl) {
     } catch (_) { return ''; }
 }
 
-// Unified resolver to determine device name for any root menu
-function getDeviceNameForMenu(rootMenuEl) {
-    // 1) Inspect aria-label to distinguish contexts
-    try {
-        const parsed = parseActionsFor(aria);
-        if (parsed) {
-            if (parsed.type === 'device' && parsed.name) {
-                // Disambiguate device vs user menu on Device View: if header device title exists and
-                // differs from the aria-label entity, treat this as the user menu and return header device.
-                const headerDevice = getHeaderDeviceNameFromDeviceView();
-                if (headerDevice && headerDevice !== parsed.name) return headerDevice;
-                return parsed.name;
-            }
-            if (parsed.type === 'row') {
-                // Investigations: resolve from controlling button/row
-                const safeId = getSafeId(rootMenuEl);
-                if (safeId) {
-                    const btn = document.querySelector(`button[aria-controls="${safeId}"]`);
-                    if (btn && isNameColumnButton(btn)) {
-                        const fromBtn = findDeviceNameFromButton(btn);
-                        if (fromBtn) return fromBtn;
-                    }
-                }
-            }
-        }
-    } catch (_) { /* fallthrough */ }
-
-    // 2) Fallback: find controlling kebab button and derive from its row
-    try {
-        const safeId = getSafeId(rootMenuEl);
-        if (safeId) {
-            const btn = document.querySelector(`button[aria-controls="${safeId}"]`);
-            if (btn && isNameColumnButton(btn)) {
-                const fromBtn = findDeviceNameFromButton(btn);
-                if (fromBtn) return fromBtn;
-            }
-        }
-    } catch (_) { /* ignore */ }
-
-    // 3) Last resort on Device View: read device from header
-    const headerDevice = getHeaderDeviceNameFromDeviceView();
-    if (headerDevice) return headerDevice;
-    return '';
-}
-
 // Get a safe ID for use in a selector (CSS.escape if available, else minimal escaping)
 function getSafeId(rootMenuEl) {
     let id = rootMenuEl.getAttribute('id') || '';
@@ -796,6 +758,19 @@ function tryInjectIntoRootMenu(rootMenuEl) {
         // Only inject on root action menus controlled by a row kebab button.
         // Native submenus are controlled by menuitems (not buttons), so skip them.
         if (!btn) return true;
+
+        // On Device View multiple action menus exist (timeline, cards, etc.) but we only
+        // want the two kebabs located in the header (device/user actions).
+        try {
+            if (detectPageContext() === 'Device View') {
+                const header = btn.closest('header[aria-label="Support header"]');
+                if (!header) {
+                    return true; // skip non-header menus inside Device View
+                }
+            }
+        } catch (_) {
+            // If context detection fails we fall back to previous behaviour.
+        }
         try { if (btn) initNqaPlaceholder(btn); } catch (_) {}
 
         // Filter menu asynchronously; only inject if there are eligible items
@@ -1033,3 +1008,488 @@ try {
         catch (_) {}
     });
 } catch (_) { /* no-op */ }
+
+const SELECTION_MENU_SELECTORS = [
+    '[role="menu"][class*="StyledActionsContainer"]',
+    '[class*="StyledTableActionBar"] [role="menu"]',
+    '[data-testid="selection-actions"]',
+    '[data-testid*="selectionActions"]',
+    '[data-testid*="bulkActions"]',
+    '[data-testid*="selectedActions"]',
+    '[class*="SelectionActions"]',
+    '[class*="BulkActions"]',
+    '[role="menu"][aria-label*="Selection"]',
+    '[role="menu"][aria-label*="Selected"]',
+    '[role="toolbar"][aria-label*="Selection"]',
+    '[role="group"][aria-label*="Selection"]'
+];
+
+let selectionFeatureInitialized = false;      // Ensure we only bootstrap export helpers once
+let selectionTableRef = null;                 // Current investigations table under watch
+let selectionMenuRef = null;                  // Native menu where export actions are injected
+let selectionMenuCleanup = null;              // Cleanup callback removing injected nodes
+let selectionFallbackRef = null;              // Floating action bar fallback element
+let selectionRefreshScheduled = false;        // requestAnimationFrame guard
+let selectionCheckboxObserver = null;         // Observe checkbox attribute changes
+let selectionTableObserver = null;            // Track table mount/unmount
+let selectionContainerObserver = null;        // Watch for DOM reshuffles around the table
+
+// Fetch export preferences from chrome.storage and apply them once export helpers are ready.
+async function loadExportPreferences() {
+    if (!window.NqaExport || !window.NqaConfigStore) return;
+    try {
+        const store = new window.NqaConfigStore();
+        const prefs = await store.getExportPrefs();
+        applyExportPreferences(prefs);
+    } catch (_) { /* ignore */ }
+}
+
+// Push the provided export preferences into the shared runtime configuration.
+function applyExportPreferences(prefs) {
+    if (!window.NqaExport || !prefs || typeof prefs !== 'object') return;
+    const cfg = {};
+    if (typeof prefs.csvDelimiter === 'string' && prefs.csvDelimiter) {
+        cfg.csvDelimiter = prefs.csvDelimiter;
+    }
+    if (typeof prefs.clipboardFormat === 'string' && prefs.clipboardFormat) {
+        cfg.textFormat = prefs.clipboardFormat;
+    }
+    try { window.NqaExport.setConfig(cfg); } catch (_) {}
+}
+
+// Lazily inject CSS for the injected export buttons and fallback bar.
+function ensureSelectionActionStyles() {
+    if (document.getElementById(SELECTION_ACTION_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = SELECTION_ACTION_STYLE_ID;
+    style.textContent = `
+        .nqa-export-action-btn{cursor:pointer;padding:6px 12px;border-radius:6px;border:1px solid rgba(0,0,0,0.12);background:#ffffff;color:#1f1f1f;font-size:13px;line-height:1.4;transition:background .15s ease,border-color .15s ease}
+        .nqa-export-action-btn:hover{background:#f4f4f6}
+        .nqa-export-action-btn:focus{outline:2px solid #3578e5;outline-offset:2px}
+        @media (prefers-color-scheme: dark){.nqa-export-action-btn{background:#2a2d33;color:#f2f4f8;border-color:rgba(255,255,255,0.24)}.nqa-export-action-btn:hover{background:#34373f}}
+        #${SELECTION_FALLBACK_ID}{position:fixed;right:16px;bottom:24px;display:none;align-items:center;gap:8px;padding:10px 14px;background:rgba(34,34,34,0.92);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.18),0 2px 4px rgba(0,0,0,0.1);z-index:2147483647}
+        #${SELECTION_FALLBACK_ID}.show{display:flex}
+        #${SELECTION_FALLBACK_ID} .nqa-export-action-btn{border-color:rgba(255,255,255,0.2)}
+        @media (prefers-color-scheme: dark){#${SELECTION_FALLBACK_ID}{background:rgba(17,17,17,0.92);box-shadow:0 8px 24px rgba(0,0,0,0.4),0 2px 4px rgba(0,0,0,0.32)}#${SELECTION_FALLBACK_ID} .nqa-export-action-btn{border-color:rgba(255,255,255,0.3)}}
+    `;
+    document.head.appendChild(style);
+}
+
+// Clone a native menu item (button or link) to create a consistent export action.
+function buildSelectionMenuEntry(container, label, onActivate) {
+    const templateButton = container.querySelector(`button:not([${SELECTION_BUTTON_ATTR}])`);
+    if (templateButton) {
+        const clone = templateButton.cloneNode(true);
+        try { clone.removeAttribute('id'); } catch (_) {}
+        try { clone.removeAttribute('aria-controls'); } catch (_) {}
+        try { clone.removeAttribute('aria-expanded'); } catch (_) {}
+        try { clone.removeAttribute('data-insights'); } catch (_) {}
+        try { clone.removeAttribute('data-testid'); } catch (_) {}
+        try { clone.removeAttribute('style'); } catch (_) {}
+        clone.setAttribute(SELECTION_BUTTON_ATTR, '1');
+        clone.setAttribute('type', 'button');
+        clone.setAttribute('role', 'menuitem');
+        clone.setAttribute('aria-label', label);
+        const span = clone.querySelector('span');
+        if (span) span.textContent = label;
+        else clone.textContent = label;
+        clone.addEventListener('click', (event) => {
+            try { event.preventDefault(); } catch (_) {}
+            try { event.stopPropagation(); } catch (_) {}
+            onActivate(event);
+        }, { capture: true });
+        return { root: clone, button: clone };
+    }
+
+    const templateLink = container.querySelector(`a[role="menuitem"]`);
+    if (templateLink) {
+        const outer = templateLink.closest('[class*="StyledActionMenuItemContainer"]');
+        const wrapper = outer ? outer.cloneNode(true) : templateLink.cloneNode(true);
+        const clickable = outer ? wrapper.querySelector('a[role="menuitem"]') : wrapper;
+        if (clickable) {
+            try { clickable.removeAttribute('href'); } catch (_) {}
+            try { clickable.removeAttribute('target'); } catch (_) {}
+            try { clickable.removeAttribute('rel'); } catch (_) {}
+            try { clickable.removeAttribute('id'); } catch (_) {}
+            clickable.setAttribute(SELECTION_BUTTON_ATTR, '1');
+            clickable.setAttribute('role', 'menuitem');
+            const span = clickable.querySelector('span');
+            if (span) span.textContent = label;
+            else clickable.textContent = label;
+            clickable.addEventListener('click', (event) => {
+                try { event.preventDefault(); } catch (_) {}
+                try { event.stopPropagation(); } catch (_) {}
+                onActivate(event);
+            });
+        }
+        return { root: wrapper, button: clickable || wrapper };
+    }
+
+    ensureSelectionActionStyles();
+    const fallback = document.createElement('button');
+    fallback.type = 'button';
+    fallback.className = 'nqa-export-action-btn';
+    fallback.textContent = label;
+    fallback.setAttribute(SELECTION_BUTTON_ATTR, '1');
+    fallback.addEventListener('click', (event) => {
+        try { event.preventDefault(); } catch (_) {}
+        try { event.stopPropagation(); } catch (_) {}
+        onActivate(event);
+    });
+    return { root: fallback, button: fallback };
+}
+
+// Insert a neutral Spark icon menu item purely as a visual separator.
+function buildSparkIconMenuItem(container) {
+    try {
+        const refItem = container.querySelector('[class*="StyledActionMenuItemContainer"]');
+        const wrapper = refItem ? refItem.cloneNode(false) : document.createElement('div');
+        if (wrapper.hasAttribute) {
+            try { wrapper.removeAttribute('id'); } catch (_) {}
+            try { wrapper.removeAttribute('data-testid'); } catch (_) {}
+        }
+        wrapper.setAttribute(INJECTED_ATTR, '1');
+
+        const contentsRef = refItem ? refItem.querySelector('[class*="StyledContents"]') : null;
+        const contents = contentsRef ? contentsRef.cloneNode(false) : document.createElement('div');
+        if (contents.setAttribute) contents.setAttribute(INJECTED_ATTR, '1');
+
+        const holder = document.createElement('span');
+        holder.setAttribute('role', 'presentation');
+        holder.setAttribute(SELECTION_BUTTON_ATTR, '1');
+        holder.style.display = 'inline-flex';
+        holder.style.alignItems = 'center';
+        holder.style.justifyContent = 'center';
+        holder.style.padding = '6px 0';
+
+        const icon = buildQuickActionsIconSvg();
+        if (icon) {
+            icon.setAttribute('width', '16');
+            icon.setAttribute('height', '16');
+            icon.style.width = '16px';
+            icon.style.height = '16px';
+            holder.appendChild(icon);
+        }
+
+        contents.appendChild(holder);
+        wrapper.appendChild(contents);
+        return wrapper;
+    } catch (_) {
+        return null;
+    }
+}
+
+// Produce a human-friendly toast message describing the export outcome.
+function buildSelectionFeedback(action, payload) {
+    const count = Array.isArray(payload?.rows) ? payload.rows.length : 0;
+    const total = typeof payload?.totalSelected === 'number' ? payload.totalSelected : count;
+    const limit = typeof payload?.limitUsed === 'number' ? payload.limitUsed : (window.NqaExport?.MAX_ROWS_DEFAULT || 200);
+    const noun = count === 1 ? 'row' : 'rows';
+    if (!count) return action === 'download' ? 'No rows exported.' : 'No rows copied.';
+    const verb = action === 'download' ? 'Exported' : 'Copied';
+    if (payload?.truncated && total > count) {
+        return `${verb} ${count} of ${total} ${noun} (limit ${limit}).`;
+    }
+    return `${verb} ${count} ${noun}.`;
+}
+
+// Lightweight visibility check for Nexthink popovers (helps avoid injecting into hidden elements).
+function isElementVisible(el) {
+    if (!el) return false;
+    try {
+        const cs = window.getComputedStyle(el);
+        if (!cs || cs.display === 'none' || cs.visibility === 'hidden') return false;
+        const opacity = parseFloat(cs.opacity || '1');
+        if (opacity === 0) return false;
+        const rect = el.getBoundingClientRect();
+        return rect && rect.width > 0 && rect.height > 0;
+    } catch (_) { return false; }
+}
+
+// Locate the currently visible selection bulk-action container provided by Nexthink.
+function findSelectionMenuContainer() {
+    const table = selectionTableRef || document.querySelector(INVESTIGATION_TABLE_SELECTOR);
+    const roots = [];
+    if (table) {
+        if (table.parentElement) roots.push(table.parentElement);
+        if (table.parentElement?.parentElement) roots.push(table.parentElement.parentElement);
+    }
+    roots.push(document.body);
+    for (const root of roots) {
+        if (!root) continue;
+        for (const selector of SELECTION_MENU_SELECTORS) {
+            try {
+                const candidate = root.querySelector(selector);
+                if (!candidate) continue;
+                if (candidate.id && candidate.id === SELECTION_FALLBACK_ID) continue;
+                if (!isElementVisible(candidate)) continue;
+                return candidate;
+            } catch (_) { /* ignore */ }
+        }
+    }
+    return null;
+}
+
+// Remove previously injected export buttons and clean their event handlers.
+function teardownSelectionMenu() {
+    if (selectionMenuCleanup) {
+        try { selectionMenuCleanup(); } catch (_) {}
+        selectionMenuCleanup = null;
+    }
+    if (selectionMenuRef) {
+        try { selectionMenuRef.removeAttribute(SELECTION_MENU_ATTR); } catch (_) {}
+        selectionMenuRef = null;
+    }
+}
+
+// Inject separators, Spark icon, and export buttons into the native selection menu.
+function injectSelectionMenu(menu) {
+    if (!menu) return false;
+    if (menu === selectionMenuRef) {
+        if (menu.querySelector(`[${SELECTION_BUTTON_ATTR}]`)) return true;
+    } else {
+        teardownSelectionMenu();
+    }
+
+    const copyEntry = buildSelectionMenuEntry(menu, 'Copy selection', handleSelectionCopy);
+    const csvEntry = buildSelectionMenuEntry(menu, 'Download CSV', handleSelectionDownload);
+    const frag = document.createDocumentFragment();
+
+    const separatorBefore = buildMenuSeparator(menu) || document.createElement('div');
+    if (!separatorBefore.hasAttribute?.(INJECTED_ATTR)) separatorBefore.setAttribute?.(INJECTED_ATTR, '1');
+    frag.appendChild(separatorBefore);
+
+    const sparkItem = buildSparkIconMenuItem(menu);
+    if (sparkItem) frag.appendChild(sparkItem);
+
+    const separatorAfter = buildMenuSeparator(menu) || document.createElement('div');
+    if (!separatorAfter.hasAttribute?.(INJECTED_ATTR)) separatorAfter.setAttribute?.(INJECTED_ATTR, '1');
+    frag.appendChild(separatorAfter);
+
+    if (copyEntry?.root) frag.appendChild(copyEntry.root);
+    if (csvEntry?.root) frag.appendChild(csvEntry.root);
+
+    try { menu.appendChild(frag); }
+    catch (_) { return false; }
+
+    selectionMenuRef = menu;
+    try { menu.setAttribute(SELECTION_MENU_ATTR, '1'); } catch (_) {}
+    selectionMenuCleanup = () => {
+        try { separatorBefore.remove(); } catch (_) {}
+        try { separatorAfter.remove(); } catch (_) {}
+        try { sparkItem?.remove(); } catch (_) {}
+        try { copyEntry.root.remove(); } catch (_) {}
+        try { csvEntry.root.remove(); } catch (_) {}
+    };
+    return true;
+}
+
+// Create (or reveal) the floating fallback action bar when the native menu is missing.
+function ensureFallbackBar() {
+    ensureSelectionActionStyles();
+    let bar = document.getElementById(SELECTION_FALLBACK_ID);
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = SELECTION_FALLBACK_ID;
+        bar.className = 'nqa-export-floating-bar';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'nqa-export-action-btn';
+        copyBtn.textContent = 'Copy selection';
+        copyBtn.setAttribute(SELECTION_BUTTON_ATTR, '1');
+        copyBtn.addEventListener('click', handleSelectionCopy);
+
+        const csvBtn = document.createElement('button');
+        csvBtn.type = 'button';
+        csvBtn.className = 'nqa-export-action-btn';
+        csvBtn.textContent = 'Download CSV';
+        csvBtn.setAttribute(SELECTION_BUTTON_ATTR, '1');
+        csvBtn.addEventListener('click', handleSelectionDownload);
+
+        bar.appendChild(copyBtn);
+        bar.appendChild(csvBtn);
+        document.body.appendChild(bar);
+    }
+    bar.classList.add('show');
+    selectionFallbackRef = bar;
+    return bar;
+}
+
+// Hide the floating fallback bar when no selection remains.
+function hideFallbackBar() {
+    if (selectionFallbackRef) {
+        selectionFallbackRef.classList.remove('show');
+    }
+}
+
+// Handle click on "Copy selection" (collect data, build clipboard payload, show toast).
+async function handleSelectionCopy(event) {
+    let anchor = null;
+    if (event) {
+        try { event.preventDefault(); } catch (_) {}
+        try { event.stopPropagation(); } catch (_) {}
+        anchor = (event.currentTarget instanceof Element)
+            ? event.currentTarget
+            : event.target?.closest(`[${SELECTION_BUTTON_ATTR}], button, [role="menuitem"]`);
+    }
+    const api = window.NqaExport;
+    if (!api) return;
+    const payload = api.collectSelectionData();
+    if (!Array.isArray(payload.rows) || !payload.rows.length) {
+        api.showToast('No rows selected', { anchor });
+        return;
+    }
+    const clipboardData = api.buildClipboardData ? api.buildClipboardData(payload) : { plain: api.buildPlainText(payload) };
+    const ok = await api.copyToClipboard(clipboardData);
+    api.showToast(ok ? buildSelectionFeedback('copy', payload) : 'Unable to copy selection', { anchor });
+}
+
+// Handle click on "Download CSV" (collect data, serialize, show toast).
+function handleSelectionDownload(event) {
+    let anchor = null;
+    if (event) {
+        try { event.preventDefault(); } catch (_) {}
+        try { event.stopPropagation(); } catch (_) {}
+        anchor = (event.currentTarget instanceof Element)
+            ? event.currentTarget
+            : event.target?.closest(`[${SELECTION_BUTTON_ATTR}], button, [role="menuitem"]`);
+    }
+    const api = window.NqaExport;
+    if (!api) return;
+    const payload = api.collectSelectionData();
+    if (!Array.isArray(payload.rows) || !payload.rows.length) {
+        api.showToast('No rows selected', { anchor });
+        return;
+    }
+    const csv = api.buildCsvString(payload);
+    const saved = api.downloadCsv(csv);
+    api.showToast(saved ? buildSelectionFeedback('download', payload) : 'Unable to export selection', { anchor });
+}
+
+// Debounce refresh of injected actions after DOM mutations / checkbox toggles.
+function scheduleSelectionRefresh() {
+    if (selectionRefreshScheduled) return;
+    selectionRefreshScheduled = true;
+    const runner = () => {
+        selectionRefreshScheduled = false;
+        refreshSelectionExport();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(runner);
+    else setTimeout(runner, 60);
+}
+
+// Decide where to render export actions (native menu vs fallback bar) based on current selection.
+function refreshSelectionExport() {
+    const api = window.NqaExport;
+    if (!api) return;
+    const ctx = (typeof detectPageContext === 'function') ? detectPageContext() : '';
+    if (ctx && ctx !== 'Investigations') {
+        teardownSelectionMenu();
+        hideFallbackBar();
+        return;
+    }
+    const summary = api.getSelectionSummary();
+    if (!summary || !summary.checked) {
+        teardownSelectionMenu();
+        hideFallbackBar();
+        return;
+    }
+    const menu = findSelectionMenuContainer();
+    if (menu && injectSelectionMenu(menu)) {
+        hideFallbackBar();
+        return;
+    }
+    ensureFallbackBar();
+}
+
+// React to checkbox clicks/changes to keep the export menu up to date.
+function handleCheckboxInteraction(event) {
+    const target = event?.target;
+    if (!target || typeof target.closest !== 'function') return;
+    const checkbox = target.matches(SELECTION_CHECKBOX_SELECTOR)
+        ? target
+        : target.closest(SELECTION_CHECKBOX_SELECTOR);
+    if (!checkbox) return;
+    scheduleSelectionRefresh();
+}
+
+// Track the investigations table lifecycle and attach observers + event listeners.
+function bindSelectionTable() {
+    const table = document.querySelector(INVESTIGATION_TABLE_SELECTOR);
+    if (table === selectionTableRef) return;
+
+    if (selectionTableRef) {
+        try { selectionTableRef.removeEventListener('change', handleCheckboxInteraction, true); } catch (_) {}
+        try { selectionTableRef.removeEventListener('click', handleCheckboxInteraction, true); } catch (_) {}
+    }
+
+    selectionTableRef = table;
+
+    if (!table) {
+        if (selectionCheckboxObserver) selectionCheckboxObserver.disconnect();
+        if (selectionContainerObserver) selectionContainerObserver.disconnect();
+        return;
+    }
+
+    table.addEventListener('change', handleCheckboxInteraction, true);
+    table.addEventListener('click', handleCheckboxInteraction, true);
+
+    if (selectionCheckboxObserver) {
+        selectionCheckboxObserver.disconnect();
+        selectionCheckboxObserver.observe(table, { attributes: true, attributeFilter: ['checked', 'aria-checked'], subtree: true });
+    }
+
+    if (selectionContainerObserver) {
+        selectionContainerObserver.disconnect();
+        const parent = table.parentElement;
+        if (parent) {
+            selectionContainerObserver.observe(parent, { childList: true, subtree: true });
+        }
+    }
+
+    scheduleSelectionRefresh();
+}
+
+// One-time bootstrap for export helpers: load prefs, register observers, bind table.
+function initSelectionExportFeature() {
+    if (selectionFeatureInitialized) return;
+    if (!window.NqaExport) {
+        setTimeout(initSelectionExportFeature, 60);
+        return;
+    }
+    selectionFeatureInitialized = true;
+
+    loadExportPreferences();
+
+    if (typeof MutationObserver !== 'undefined') {
+        selectionCheckboxObserver = new MutationObserver(() => scheduleSelectionRefresh());
+        selectionTableObserver = new MutationObserver(() => bindSelectionTable());
+        selectionContainerObserver = new MutationObserver(() => scheduleSelectionRefresh());
+        selectionTableObserver.observe(document.body, { childList: true, subtree: true });
+    }
+
+    bindSelectionTable();
+    scheduleSelectionRefresh();
+}
+
+initSelectionExportFeature();
+
+try {
+    chrome.runtime.onMessage.addListener((msg) => {
+        if (!msg || msg.type !== 'nqa-export-prefs-updated') return;
+        if (msg.prefs) applyExportPreferences(msg.prefs);
+        else loadExportPreferences();
+    });
+} catch (_) { /* ignore */ }
+
+try {
+    chrome.storage?.onChanged?.addListener((changes, area) => {
+        if (area !== 'sync') return;
+        if (changes?.exportPrefs) {
+            const next = changes.exportPrefs.newValue;
+            if (next) applyExportPreferences(next);
+            else loadExportPreferences();
+        }
+    });
+} catch (_) { /* ignore */ }

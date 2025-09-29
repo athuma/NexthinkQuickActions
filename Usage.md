@@ -17,18 +17,21 @@ This guide explains how to configure and use the Nexthink Quick Actions browser 
    - Review the generated URL (`https://<tenant>.<region>.nexthink.cloud`) and save.
    - The preview shows `{instance_name}` alongside the resolved prefix so you know exactly what value will be injected in your URLs.
 3. **Add quick action links**
-   - In *Quick Actions menu entries*, press *Add*.
+   - In *Quick Actions menu entries*, press *Add entry*.
    - Alternatively, click *Templates* in the toolbar to insert one or more ready-made actions.
-   - Supply a menu name (the text you will see in the Quick Action Menu).
-   - Paste the destination URL template. Replace the dynamic parts with placeholders like `{devices_name}` or `{*full_name}`.
-   - The placeholder will be replaced by current value of row in investigation.
-   - {*Keyword} match the first column ending with Keyword
-   - Use the helper text under the textarea as a reminder of placeholder rules.
-   - Save the entry. Repeat for any additional links.
+   - Supply a menu name (the text you will see inside the Quick Actions menu).
+   - Paste the destination URL template. Replace the dynamic parts with placeholders such as `{devices_name}` or `{*full_name}`.
+   - Placeholders are replaced by the values of the selected row in Investigations/Device View.
+   - Wildcards like `{*keyword}` match the first column name that ends with `keyword`.
+   - Use the helper text under the textarea as a reminder of placeholder rules, then save the entry. Repeat for any additional links.
 4. **Organise or edit entries**
    - Use the up/down arrows to reorder actions.
    - Click the pencil icon to modify an entry, or the trash icon to remove it.
    - Managed (locked) items may be present if your administrator preconfigured them.
+5. **Tune export settings (optional)**
+   - In the *Export settings* card, adjust the **CSV separator** used when downloading selections.
+   - Pick the **Clipboard format** (`Markdown`, `ASCII table`, or `HTML table`) applied when copying rows from Investigations. Use the HTML option when pasting into Outlook or other rich-text editors.
+   - Click **Save**; changes are applied immediately in all Nexthink tabs.
 
 ## 3. Use quick actions inside Nexthink
 1. Navigate to **Device View** or **Investigations** in Nexthink.
@@ -50,18 +53,26 @@ This guide explains how to configure and use the Nexthink Quick Actions browser 
 4. Click either the placeholder or *Copier* to copy it to your clipboard, then paste it into a quick action URL.
 5. The panel updates automatically as the table content changes. Close it by clicking the QuickAction icon again.
 
-## 6. Importing or exporting configurations
+## 6. Export selected rows from Investigations
+1. Select one or more rows in an Investigation (use the checkboxes on the left).
+2. The Nexthink selection toolbar appears; it now includes the Spark icon followed by two actions:
+   - **Copy selection** – copies the selected rows plus column headers to the clipboard using the format chosen in the options page.
+   - **Download CSV** – downloads a CSV file using the configured separator.
+3. Toast notifications confirm the number of rows exported and warn when a row limit is reached (default 200).
+4. When copying in ASCII format, paste into a monospaced font (Courier, Consolas, Monaco, Menlo, etc.) so the table columns stay aligned. HTML table output keeps the layout intact in Outlook and other HTML-aware clients.
+
+## 7. Importing or exporting configurations
 - On the options page, use the **Export** button to download a JSON backup of your menus and instance.
-- Use **Import** to load a JSON file (for example the template in `debug/NQA_Configuration+wildcard.json`). Choose *Add* to append entries or *Replace* to overwrite your current list.
+- Use **Import** to load a JSON file (for example one shared by your team or generated from another browser). Choose *Add* to append entries or *Replace* to overwrite your current list.
 - When importing, the dialog shows whether an instance will be updated in addition to the menu entries.
 
-## 7. Tips & best practices
+## 8. Tips & best practices
 - Keep menu names short and action-oriented (e.g. `Open in ServiceNow`).
 - Test each action after editing: open the kebab menu, run the link, and confirm that placeholders resolved correctly.
 - Reuse the cheat sheet often; it reflects the exact keys the content script reads from the current view.
 - Managed environments may disable editing for certain rows. Contact your administrator if an entry is locked.
 
-## 8. Sample URL templates
+## 9. Sample URL templates
 Use the examples below as a starting point and adapt the placeholders to match the data captured in your Nexthink view. Each URL already includes `{instance_name}` so it works once the tenant prefix is configured in the options page.
 
 - **Search device in ServiceNow** (match on device name)
@@ -74,10 +85,12 @@ Use the examples below as a starting point and adapt the placeholders to match t
   - `https://{instance_name}.service-now.com/nav_to.do?uri=sys_user_list.do%3Fsysparm_query%3Dlast_name%253D{*ad_username}`
 - **Open device in Jamf Pro**
   - `https://{instance_name}.jamfcloud.com/computers.html?queryType=COMPUTERS&version=&query={devices_name}`
-- **Open user in Workday** (replace `<corp_segment>` with your tenant path)
-  - `https://wd103.myworkday.com/<corp_segment>/d/search.htmld?contextualsearchpill=true&state=searchCategory-all:default&q={*full_name}`
+- **Open user in Workday** (replace `<cluster>` and `<tenant_name>` with your company's values)
+  - `https://<cluster>.myworkday.com/<tenant_name>/d/search.htmld?contextualsearchpill=true&state=searchCategory-all:default&q={*full_name}`
+  - **`<cluster>`**: Your instance's data center (e.g., `wd3`, `wd5`, `wd103`).
+  - **`<tenant_name>`**: Your company's unique identifier on Workday.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 - **Quick Actions submenu missing**: ensure you are in Device View or Investigations and that at least one entry contains a placeholder matching the current column.
 - **Invalid URL warning**: check that the template starts with `http://` or `https://` and contains at least one `{placeholder}`.
 - **Popup shows “Add Nexthink instance”**: configure the instance in the options page so the popup knows where to redirect.

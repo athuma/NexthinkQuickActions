@@ -79,17 +79,6 @@ h1 { margin: 0 0 6px; font-size: 32px; font-weight: 700; display: inline-flex; a
   padding: 16px;
   position: relative;
 }
-/* Floating Add button aligned to the right, stays above toolbar */
-.add-floating {
-  float: right;
-  margin-top: 12px;
-}
-/* Ensure floats are cleared so the toolbar sits below */
-.panel-content::after {
-  content: "";
-  display: block;
-  clear: both;
-}
 .toolbar {
   display: flex;
   align-items: center;
@@ -165,6 +154,54 @@ h1 { margin: 0 0 6px; font-size: 32px; font-weight: 700; display: inline-flex; a
 }
 /* Add a little extra space above the Nexthink Instance block */
 #instanceSection { margin-top: 12px; }
+
+.export-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.export-grid .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.export-grid .field-label {
+  font-weight: 600;
+}
+
+#csvDelimiterInput {
+  width: 96px;
+}
+
+.radio-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.save-status {
+  margin-left: 12px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.save-status.error {
+  color: #ff6b6b;
+  opacity: 1;
+}
 
 .cfg-table {
   width: 100%;

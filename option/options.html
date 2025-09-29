@@ -46,6 +46,43 @@
               <!-- Filled by options.js; shows an empty-row message when none -->
             </tbody>
           </table>
+          <div class="section-footer">
+            <button class="btn btn-success" id="addBtn" type="button" aria-label="Add menu entry">Add entry</button>
+          </div>
+        </section>
+
+        <section class="section instance-card" id="exportSection" aria-label="Export settings">
+          <h2 class="section-title">Export settings</h2>
+          <div class="export-grid">
+            <div class="field">
+              <label for="csvDelimiterInput">CSV separator</label>
+              <input id="csvDelimiterInput" type="text" inputmode="text" maxlength="3" autocomplete="off" placeholder="," />
+              <div class="help-text">Used when downloading selection as CSV.</div>
+              <div class="error-text" id="csvDelimiterErr" hidden>Enter at least one character.</div>
+            </div>
+            <div class="field">
+              <span class="field-label">Clipboard format</span>
+              <div class="radio-group" id="clipboardFormatGroup">
+                <label class="radio-option">
+                  <input type="radio" name="clipboardFormat" value="markdown" checked />
+                  <span>Markdown</span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="clipboardFormat" value="ascii" />
+                  <span>ASCII table</span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="clipboardFormat" value="html" />
+                  <span>HTML table</span>
+                </label>
+              </div>
+              <div class="help-text">Choose how copied selections are formatted.</div>
+            </div>
+          </div>
+          <div class="section-footer">
+            <button class="btn btn-success" id="exportSaveBtn" type="button">Save</button>
+            <span class="save-status" id="exportSaveStatus" role="status" aria-live="polite"></span>
+          </div>
         </section>
         <!-- Floating Add button at bottom-right of panel content -->
         <button class="btn add-floating" id="addBtn" type="button" aria-label="Add menu entry">Add</button>

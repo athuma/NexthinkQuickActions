@@ -1,48 +1,60 @@
 (function () {
-  'use strict';
+    "use strict";
 
-  function getPageContext() {
-    try {
-      if (typeof detectPageContext === 'function') {
-        const ctx = detectPageContext();
-        if (ctx) return ctx;
-      }
-    } catch (_) { /* ignore */ }
-    try {
-      const h2 = document.querySelector('header h2');
-      const t = (h2?.textContent || '').trim();
-      if (!t) return '';
-      if (/\bInvestigations\b/i.test(t)) return 'Investigations';
-      if (/\bDevice\s*View\b/i.test(t)) return 'Device View';
-      return t;
-    } catch (_) { return ''; }
-  }
+    function getPageContext() {
+        try {
+            if (typeof detectPageContext === "function") {
+                const ctx = detectPageContext();
+                if (ctx) return ctx;
+            }
+        } catch (_) {
+            /* ignore */
+        }
+        try {
+            const h2 = document.querySelector("header h2");
+            const t = (h2?.textContent || "").trim();
+            if (!t) return "";
+            if (/\bInvestigations\b/i.test(t)) return "Investigations";
+            if (/\bDevice\s*View\b/i.test(t)) return "Device View";
+            return t;
+        } catch (_) {
+            return "";
+        }
+    }
 
-  function isSupportedPage(ctx) {
-    const kind = ctx || getPageContext();
-    return kind === 'Investigations' || kind === 'Device View';
-  }
+    function isSupportedPage(ctx) {
+        const kind = ctx || getPageContext();
+        return kind === "Investigations" || kind === "Device View";
+    }
 
-  function selectHeaderNodes() {
-    try {
-      return Array.from(document.querySelectorAll('table[role="presentation"] th[rowspan="1"] div[class*="LinesEllipsis"]'));
-    } catch (_) { return []; }
-  }
+    function selectHeaderNodes() {
+        try {
+            return Array.from(
+                document.querySelectorAll(
+                    'table[role="presentation"] th[rowspan="1"] div[class*="LinesEllipsis"]'
+                )
+            );
+        } catch (_) {
+            return [];
+        }
+    }
 
-  function getLabelText(el) {
-    try {
-      const txt = Array.from(el.childNodes)
-        .filter(n => n.nodeType === Node.TEXT_NODE)
-        .map(n => n.textContent || '')
-        .join('')
-        .trim();
-      return txt || (el.textContent || '').trim();
-    } catch (_) { return (el && el.textContent || '').trim(); }
-  }
+    function getLabelText(el) {
+        try {
+            const txt = Array.from(el.childNodes)
+                .filter((n) => n.nodeType === Node.TEXT_NODE)
+                .map((n) => n.textContent || "")
+                .join("")
+                .trim();
+            return txt || (el.textContent || "").trim();
+        } catch (_) {
+            return ((el && el.textContent) || "").trim();
+        }
+    }
 
-  function ensureStyles() {
-    if (document.getElementById('nqa-cheatsheet-style')) return;
-    const css = `
+    function ensureStyles() {
+        if (document.getElementById("nqa-cheatsheet-style")) return;
+        const css = `
     button#nqa-cheatsheet-toggle{position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#fff;border-radius:20px;border:1px solid rgba(0,0,0,0.15);padding:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
     button#nqa-cheatsheet-toggle:hover{background:#f6f6f6}
     button#nqa-cheatsheet-toggle svg{display:block}
@@ -70,258 +82,346 @@
       #nqa-toast{background:#111;color:#eee}
     }
     `;
-    const style = document.createElement('style');
-    style.id = 'nqa-cheatsheet-style';
-    style.textContent = css;
-    document.head.appendChild(style);
-  }
-
-  function setMenuIconActive(li, active) {
-    try {
-      const svg = li && li.querySelector ? li.querySelector('svg') : null;
-      if (!svg) return;
-      const gInactive = svg.querySelector('#icon-inactive');
-      const gActive = svg.querySelector('#icon-active');
-      if (gInactive) gInactive.style.display = active ? 'none' : '';
-      if (gActive) gActive.style.display = active ? '' : 'none';
-    } catch (_) {}
-  }
-
-  function showToast(msg) {
-    let toast = document.getElementById('nqa-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'nqa-toast';
-      document.body.appendChild(toast);
+        const style = document.createElement("style");
+        style.id = "nqa-cheatsheet-style";
+        style.textContent = css;
+        document.head.appendChild(style);
     }
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 1500);
-  }
 
-  function copy(text) {
-    try {
-      navigator.clipboard.writeText(text).then(() => showToast(`Copié: ${text}`)).catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); showToast(`Copié: ${text}`); } catch (_) {}
-        document.body.removeChild(ta);
-      });
-    } catch (_) {}
-  }
+    function setMenuIconActive(li, active) {
+        try {
+            const svg = li && li.querySelector ? li.querySelector("svg") : null;
+            if (!svg) return;
+            const gInactive = svg.querySelector("#icon-inactive");
+            const gActive = svg.querySelector("#icon-active");
+            if (gInactive) gInactive.style.display = active ? "none" : "";
+            if (gActive) gActive.style.display = active ? "" : "none";
+        } catch (_) {}
+    }
 
-  const DEVICE_VIEW_PLACEHOLDERS = [
-    { label: 'Device name', key: 'devices_name' },
-    { label: 'Login name', key: 'login_name' },
-    { label: 'Full name', key: 'full_name' },
-    { label: 'AD name', key: 'ad_name' }
-  ];
-
-  function appendPlaceholderRow(list, label, key, value) {
-    const safeKey = String(key || '').trim();
-    if (!safeKey) return false;
-    const safeLabel = (label || '').trim() || safeKey;
-    const placeholder = `{${safeKey}}`;
-    const row = document.createElement('div'); row.className = 'nqa-row';
-    const lab = document.createElement('div'); lab.className = 'nqa-label'; lab.textContent = safeLabel;
-    const val = document.createElement('div'); val.className = 'nqa-key'; val.textContent = placeholder;
-    const btn = document.createElement('button'); btn.className = 'nqa-copy'; btn.type = 'button'; btn.title = `Copier ${placeholder}`; btn.textContent = 'Copier';
-    const handleCopy = () => copy(placeholder);
-    btn.addEventListener('click', handleCopy);
-    val.addEventListener('click', handleCopy);
-    try { val.title = value ? String(value) : placeholder; } catch (_) {}
-    row.appendChild(lab); row.appendChild(val); row.appendChild(btn);
-    list.appendChild(row);
-    return true;
-  }
-
-  function populateDeviceView(list) {
-    let count = 0;
-    let raw = {};
-    try {
-      if (typeof buildDeviceViewPlaceholder === 'function') {
-        const obj = buildDeviceViewPlaceholder();
-        raw = (obj && obj.rawValues) || {};
-      }
-    } catch (_) { raw = {}; }
-    DEVICE_VIEW_PLACEHOLDERS.forEach(({ label, key }) => {
-      if (appendPlaceholderRow(list, label, key, raw[key])) {
-        count++;
-      }
-    });
-    return count;
-  }
-
-  function injectToggleIntoMenubar() {
-    try {
-      // There can be multiple menubar ULs; pick the correct one.
-      const uls = document.querySelectorAll("nav ul[role='menubar']")
-      if(uls.length === 0) return null;
-      const ul = uls[uls.length - 1]; // take last one
-      if (!ul) return null;
-      let exist = document.getElementById('nqa-cheatsheet-toggle');
-      if (exist) return exist;
-      // Clone last item to inherit styles and structure
-      const lastItem = ul.querySelector("li[data-testid='item-container']:last-child");
-      if (!lastItem) return null;
-      const li = lastItem.cloneNode(true);
-      // Clean content of the main icon anchor
-      const a = li.querySelector('a[role="menuitem"], a');
-      if (!a) return null; // expected structure in this application
-      while (a.firstChild) a.removeChild(a.firstChild);
-      li.id = 'nqa-cheatsheet-toggle';
-      a.removeAttribute('id');
-      a.title = 'QuickAction – Placeholders';
-      a.setAttribute('aria-label','QuickAction – Placeholders');
-      a.setAttribute('aria-haspopup','false');
-      a.setAttribute('tabindex','-1');
-      try {
-        const svgColor = lastItem.querySelector('svg')?.getAttribute('color') || 'currentColor';
-        const svg = (typeof buildQuickActionsIconSvg === 'function') ? buildQuickActionsIconSvg(true) : null;
-        if (svg) {
-          svg.setAttribute('width','16');
-          svg.setAttribute('height','16');
-          svg.setAttribute('color', svgColor);
-          a.appendChild(svg);
-        } else {
-          a.textContent = 'QuickAction';
+    function showToast(msg) {
+        let toast = document.getElementById("nqa-toast");
+        if (!toast) {
+            toast = document.createElement("div");
+            toast.id = "nqa-toast";
+            document.body.appendChild(toast);
         }
-      } catch (_) { a.textContent = 'QuickAction'; }
-      // Update the title wrapper anchor (second <a>), if present
-      try {
-        const anchors = Array.from(li.querySelectorAll('a'));
-        const titleAnchor = anchors.find(el => el !== a);
-        if (titleAnchor) {
-          titleAnchor.removeAttribute('id');
-          const titleDiv = titleAnchor.querySelector('div') || null;
-          if (titleDiv) {
-            titleDiv.textContent = 'QuickAction';
-            try { titleDiv.setAttribute('title', 'QuickAction'); } catch (_) {}
-          } else {
-            titleAnchor.textContent = 'QuickAction';
-          }
+        toast.textContent = msg;
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 1500);
+    }
+
+    function copy(text) {
+        try {
+            navigator.clipboard
+                .writeText(text)
+                .then(() => showToast(`Copié: ${text}`))
+                .catch(() => {
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand("copy");
+                        showToast(`Copié: ${text}`);
+                    } catch (_) {}
+                    document.body.removeChild(ta);
+                });
+        } catch (_) {}
+    }
+
+    const DEVICE_VIEW_PLACEHOLDERS = [
+        { label: "Device name", key: "devices_name" },
+        { label: "Login name", key: "login_name" },
+        { label: "Full name", key: "full_name" },
+        { label: "AD name", key: "ad_name" },
+    ];
+
+    function appendPlaceholderRow(list, label, key, value) {
+        const safeKey = String(key || "").trim();
+        if (!safeKey) return false;
+        const safeLabel = (label || "").trim() || safeKey;
+        const placeholder = `{${safeKey}}`;
+        const row = document.createElement("div");
+        row.className = "nqa-row";
+        const lab = document.createElement("div");
+        lab.className = "nqa-label";
+        lab.textContent = safeLabel;
+        const val = document.createElement("div");
+        val.className = "nqa-key";
+        val.textContent = placeholder;
+        const btn = document.createElement("button");
+        btn.className = "nqa-copy";
+        btn.type = "button";
+        btn.title = `Copier ${placeholder}`;
+        btn.textContent = "Copier";
+        const handleCopy = () => copy(placeholder);
+        btn.addEventListener("click", handleCopy);
+        val.addEventListener("click", handleCopy);
+        try {
+            val.title = value ? String(value) : placeholder;
+        } catch (_) {}
+        row.appendChild(lab);
+        row.appendChild(val);
+        row.appendChild(btn);
+        list.appendChild(row);
+        return true;
+    }
+
+    function populateDeviceView(list) {
+        let count = 0;
+        let raw = {};
+        try {
+            if (typeof buildDeviceViewPlaceholder === "function") {
+                const obj = buildDeviceViewPlaceholder();
+                raw = (obj && obj.rawValues) || {};
+            }
+        } catch (_) {
+            raw = {};
         }
-      } catch (_) {}
-      // Insert separator clone (before our item) if available in this UL
-      const sep = ul.querySelector('hr');
-      if (sep) {
-        const clone = sep.cloneNode(true);
-        clone.id = 'nqa-cheatsheet-separator';
-        ul.appendChild(clone);
-      }
-      ul.appendChild(li);
-      return li;
-    } catch (_) { return null; }
-  }
-
-  function buildPanel() {
-    const wrap = document.createElement('div');
-    wrap.id = 'nqa-cheatsheet';
-    const header = document.createElement('header');
-    header.innerHTML = `<span class="nqa-title">Quick Action Link Placeholders</span>`;
-    const list = document.createElement('div');
-    list.className = 'nqa-list';
-    wrap.appendChild(header); wrap.appendChild(list);
-    return wrap;
-  }
-
-  function populate(context) {
-    try {
-      const panel = document.getElementById('nqa-cheatsheet'); if (!panel) return;
-      const list = panel.querySelector('.nqa-list'); if (!list) return;
-      list.innerHTML = '';
-      const ctx = context || getPageContext();
-      let count = 0;
-      if (ctx === 'Device View') {
-        count = populateDeviceView(list);
-      } else {
-        const nodes = selectHeaderNodes();
-        nodes.forEach((el) => {
-          const label = getLabelText(el);
-          const key = (typeof normalizeColumnKey === 'function') ? normalizeColumnKey(label) : label;
-          if (appendPlaceholderRow(list, label, key)) count++;
+        DEVICE_VIEW_PLACEHOLDERS.forEach(({ label, key }) => {
+            if (appendPlaceholderRow(list, label, key, raw[key])) {
+                count++;
+            }
         });
-      }
-      if (count === 0) {
-        const info = document.createElement('div'); info.style.padding='8px 12px'; info.textContent = 'Aucune colonne détectée.'; list.appendChild(info);
-      }
-    } catch (_) {}
-  }
-
-  function mount(context) {
-    const ctx = context || getPageContext();
-    if (!isSupportedPage(ctx)) return false;
-    ensureStyles();
-    // Toggle entry in menubar (single target app, no fallback)
-    const toggle = injectToggleIntoMenubar();
-    if (!toggle) return false; // do nothing if menu not available
-    // Panel
-    let panel = document.getElementById('nqa-cheatsheet');
-    if (!panel) {
-      panel = buildPanel();
-      panel.hidden = true;
-      document.body.appendChild(panel);
+        return count;
     }
-    populate(ctx);
-    setMenuIconActive(toggle, !panel.hidden);
-    if (toggle.dataset.nqaCheatsheetInit === '1') return true;
 
-    toggle.dataset.nqaCheatsheetInit = '1';
-    toggle.onclick = (ev) => {
-      try { ev && ev.preventDefault && ev.preventDefault(); } catch (_) {}
-      panel.hidden = !panel.hidden;
-      if (!panel.hidden) populate(getPageContext());
-      setMenuIconActive(toggle, !panel.hidden);
-    };
-
-    // Observe for table changes (debounced, ignore own panel/toggle mutations)
-    let populateScheduled = false;
-    const schedulePopulate = () => {
-      if (populateScheduled) return;
-      populateScheduled = true;
-      setTimeout(() => { try { if (!panel.hidden) populate(getPageContext()); } finally { populateScheduled = false; } }, 150);
-    };
-    const mo = new MutationObserver((muts) => {
-      if (panel.hidden) return;
-      for (const m of muts) {
-        const t = m.target;
-        if (panel.contains(t) || (toggle && toggle.contains && toggle.contains(t))) continue;
-        let skip = false;
-        if (m.addedNodes && m.addedNodes.length) {
-          for (const n of m.addedNodes) {
-            if (n instanceof Element && (panel.contains(n) || (toggle && toggle.contains && toggle.contains(n)))) { skip = true; break; }
-          }
+    function injectToggleIntoMenubar() {
+        try {
+            // There can be multiple menubar ULs; pick the correct one.
+            const uls = document.querySelectorAll("nav ul[role='menubar']");
+            if (uls.length === 0) return null;
+            const ul = uls[uls.length - 1]; // take last one
+            if (!ul) return null;
+            let exist = document.getElementById("nqa-cheatsheet-toggle");
+            if (exist) return exist;
+            // Clone last item to inherit styles and structure
+            const lastItem = ul.querySelector(
+                "li[data-testid='item-container']:last-child"
+            );
+            if (!lastItem) return null;
+            const li = lastItem.cloneNode(true);
+            // Clean content of the main icon anchor
+            const a = li.querySelector('a[role="menuitem"], a');
+            if (!a) return null; // expected structure in this application
+            while (a.firstChild) a.removeChild(a.firstChild);
+            li.id = "nqa-cheatsheet-toggle";
+            a.removeAttribute("id");
+            a.title = "QuickAction – Placeholders";
+            a.setAttribute("aria-label", "QuickAction – Placeholders");
+            a.setAttribute("aria-haspopup", "false");
+            a.setAttribute("tabindex", "-1");
+            try {
+                const svgColor =
+                    lastItem.querySelector("svg")?.getAttribute("color") ||
+                    "currentColor";
+                const svg =
+                    typeof buildQuickActionsIconSvg === "function"
+                        ? buildQuickActionsIconSvg(true)
+                        : null;
+                if (svg) {
+                    svg.setAttribute("width", "16");
+                    svg.setAttribute("height", "16");
+                    svg.setAttribute("color", svgColor);
+                    a.appendChild(svg);
+                } else {
+                    a.textContent = "QuickAction";
+                }
+            } catch (_) {
+                a.textContent = "QuickAction";
+            }
+            // Update the title wrapper anchor (second <a>), if present
+            try {
+                const anchors = Array.from(li.querySelectorAll("a"));
+                const titleAnchor = anchors.find((el) => el !== a);
+                if (titleAnchor) {
+                    titleAnchor.removeAttribute("id");
+                    const titleDiv = titleAnchor.querySelector("div") || null;
+                    if (titleDiv) {
+                        titleDiv.textContent = "QuickAction";
+                        try {
+                            titleDiv.setAttribute("title", "QuickAction");
+                        } catch (_) {}
+                    } else {
+                        titleAnchor.textContent = "QuickAction";
+                    }
+                }
+            } catch (_) {}
+            // Insert separator clone (before our item) if available in this UL
+            const sep = ul.querySelector("hr");
+            if (sep) {
+                const clone = sep.cloneNode(true);
+                clone.id = "nqa-cheatsheet-separator";
+                ul.appendChild(clone);
+            }
+            ul.appendChild(li);
+            return li;
+        } catch (_) {
+            return null;
         }
-        if (skip) continue;
-        schedulePopulate();
-        break;
-      }
-    });
-    try { mo.observe(document.body, { childList: true, subtree: true }); } catch (_) {}
-    toggle.__nqaCheatsheetObserver = mo;
-    return true;
-  }
+    }
 
-  // Defer mounting until page is ready and a supported context is detected (SPA safe)
-  function scheduleMount() {
-    const tryNow = () => {
-      const ctx = getPageContext();
-      if (!isSupportedPage(ctx)) return false;
-      return mount(ctx);
-    };
-    // If already ok, mount now
-    if (tryNow()) return;
-    // Wait for DOM ready
-    const onReady = () => { if (tryNow()) { document.removeEventListener('DOMContentLoaded', onReady); } };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', onReady);
-    else onReady();
-    // Observe DOM mutations to catch SPA navigation
-    const mo = new MutationObserver(() => { if (tryNow()) { try { mo.disconnect(); } catch (_) {} } });
-    try { mo.observe(document.body, { childList: true, subtree: true }); } catch (_) {}
-    // Safety timeout to stop observing after 15s
-    setTimeout(() => { try { mo.disconnect(); } catch (_) {} }, 15000);
-  }
+    function buildPanel() {
+        const wrap = document.createElement("div");
+        wrap.id = "nqa-cheatsheet";
+        const header = document.createElement("header");
+        header.innerHTML = `<span class="nqa-title">Quick Action Link Placeholders</span>`;
+        const list = document.createElement("div");
+        list.className = "nqa-list";
+        wrap.appendChild(header);
+        wrap.appendChild(list);
+        return wrap;
+    }
 
-  try { scheduleMount(); } catch (_) {}
+    function populate(context) {
+        try {
+            const panel = document.getElementById("nqa-cheatsheet");
+            if (!panel) return;
+            const list = panel.querySelector(".nqa-list");
+            if (!list) return;
+            list.innerHTML = "";
+            const ctx = context || getPageContext();
+            let count = 0;
+            if (ctx === "Device View") {
+                count = populateDeviceView(list);
+            } else {
+                const nodes = selectHeaderNodes();
+                nodes.forEach((el) => {
+                    const label = getLabelText(el);
+                    const key =
+                        typeof normalizeColumnKey === "function"
+                            ? normalizeColumnKey(label)
+                            : label;
+                    if (appendPlaceholderRow(list, label, key)) count++;
+                });
+            }
+            if (count === 0) {
+                const info = document.createElement("div");
+                info.style.padding = "8px 12px";
+                info.textContent = "Aucune colonne détectée.";
+                list.appendChild(info);
+            }
+        } catch (_) {}
+    }
+
+    function mount(context) {
+        const ctx = context || getPageContext();
+        if (!isSupportedPage(ctx)) return false;
+        ensureStyles();
+        // Toggle entry in menubar (single target app, no fallback)
+        const toggle = injectToggleIntoMenubar();
+        if (!toggle) return false; // do nothing if menu not available
+        // Panel
+        let panel = document.getElementById("nqa-cheatsheet");
+        if (!panel) {
+            panel = buildPanel();
+            panel.hidden = true;
+            document.body.appendChild(panel);
+        }
+        populate(ctx);
+        setMenuIconActive(toggle, !panel.hidden);
+        if (toggle.dataset.nqaCheatsheetInit === "1") return true;
+
+        toggle.dataset.nqaCheatsheetInit = "1";
+        toggle.onclick = (ev) => {
+            try {
+                ev && ev.preventDefault && ev.preventDefault();
+            } catch (_) {}
+            panel.hidden = !panel.hidden;
+            if (!panel.hidden) populate(getPageContext());
+            setMenuIconActive(toggle, !panel.hidden);
+        };
+
+        // Observe for table changes (debounced, ignore own panel/toggle mutations)
+        let populateScheduled = false;
+        const schedulePopulate = () => {
+            if (populateScheduled) return;
+            populateScheduled = true;
+            setTimeout(() => {
+                try {
+                    if (!panel.hidden) populate(getPageContext());
+                } finally {
+                    populateScheduled = false;
+                }
+            }, 150);
+        };
+        const mo = new MutationObserver((muts) => {
+            if (panel.hidden) return;
+            for (const m of muts) {
+                const t = m.target;
+                if (
+                    panel.contains(t) ||
+                    (toggle && toggle.contains && toggle.contains(t))
+                )
+                    continue;
+                let skip = false;
+                if (m.addedNodes && m.addedNodes.length) {
+                    for (const n of m.addedNodes) {
+                        if (
+                            n instanceof Element &&
+                            (panel.contains(n) ||
+                                (toggle &&
+                                    toggle.contains &&
+                                    toggle.contains(n)))
+                        ) {
+                            skip = true;
+                            break;
+                        }
+                    }
+                }
+                if (skip) continue;
+                schedulePopulate();
+                break;
+            }
+        });
+        try {
+            mo.observe(document.body, { childList: true, subtree: true });
+        } catch (_) {}
+        toggle.__nqaCheatsheetObserver = mo;
+        return true;
+    }
+
+    // Defer mounting until page is ready and a supported context is detected (SPA safe)
+    function scheduleMount() {
+        const tryNow = () => {
+            const ctx = getPageContext();
+            if (!isSupportedPage(ctx)) return false;
+            return mount(ctx);
+        };
+        // If already ok, mount now
+        if (tryNow()) return;
+        // Wait for DOM ready
+        const onReady = () => {
+            if (tryNow()) {
+                document.removeEventListener("DOMContentLoaded", onReady);
+            }
+        };
+        if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", onReady);
+        else onReady();
+        // Observe DOM mutations to catch SPA navigation
+        const mo = new MutationObserver(() => {
+            if (tryNow()) {
+                try {
+                    mo.disconnect();
+                } catch (_) {}
+            }
+        });
+        try {
+            mo.observe(document.body, { childList: true, subtree: true });
+        } catch (_) {}
+        // Safety timeout to stop observing after 15s
+        setTimeout(() => {
+            try {
+                mo.disconnect();
+            } catch (_) {}
+        }, 15000);
+    }
+
+    try {
+        scheduleMount();
+    } catch (_) {}
 })();
