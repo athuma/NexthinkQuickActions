@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.3
+
+- Fix: Managed export preferences from policies now take precedence over sync defaults in the options UI.
+- Fix: Tenant display names retain their original casing in the managed instance section.
+- Fix: Some UI tweaks
+
+## v1.0.2
+
 - Feat: Added a selection export feature with two delivery modes: downloadable CSV (configurable delimiter) and clipboard copy (Markdown, ASCII, HTML).
 - Fix: Limited Quick Actions menu injection to the Device View header kebabs to avoid duplicating entries elsewhere.
 - Fix: Moved the "Add menu" button inside the Quick Action menu section so it aligns with the Nexthink instance layout.

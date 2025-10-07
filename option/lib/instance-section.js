@@ -125,7 +125,8 @@
           return;
         }
         const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-        const prefix = esc(this._currentInstance.prefix || this._currentInstance.name || '');
+        // Preserve original tenant casing in UI; fallback to prefix when name is absent.
+        const displayName = esc(this._currentInstance.name || this._currentInstance.prefix || '');
         const regionKey = this._currentInstance.region;
         const region = esc(regionKey ? (REGION_LABELS[regionKey] || regionKey) : '');
         const url = esc(this._currentInstance.url || '');
@@ -136,7 +137,7 @@
           <div class="inst-row-placeholder">Placeholder&nbsp;<code>${PLACEHOLDER_TOKEN}</code><span class="placeholder-value">${placeholderValue}</span></div>
         `;
         const nameHtml = `
-          <div class="inst-row-name">${prefix || '—'}</div>
+          <div class="inst-row-name">${displayName || '—'}</div>
           <div class="inst-row-region">${region ? `Region: ${region}` : ''}</div>
         `;
         if (this.tbody) {

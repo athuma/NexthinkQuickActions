@@ -10,39 +10,6 @@ const SELECTION_ACTION_STYLE_ID = 'nqa-export-action-style';
 let currentSubmenuTrigger = null; // track open submenu trigger for toggle
 let cleanupFn = null; // cleanup for global listeners
 
-// Returns true if this kebab button belongs to the "Name" column.
-// Primary check: aria-label usually contains "column Name" (e.g., "Actions for row 1, column Name")
-// or "column Device -> Name" in some tables.
-// Fallback: detect if the same cell holds the device link (a[href^="/sup/device/"]).
-function isNameColumnButton(btn) {
-    const aria = btn.getAttribute("aria-label") || "";
-    if (/\bcolumn(\s+Device\s+->)?\s+Name\b/i.test(aria)) return true;
-    // Drop obfuscated class fallback; rely on semantic cells only
-    const cell = btn.closest("td, [role='cell']");
-    return !!(cell && cell.querySelector('a[href^="/sup/device/"]'));
-}
-
-// Heuristic (simplified): derive the device name from the same table row as the kebab button.
-function findDeviceNameFromButton(btn) {
-    // Locate the parent cell, then the row (fallback directly from the button if needed)
-    const cell = btn.closest("td, [role='cell']");
-    const row  = (cell && cell.closest("tr, [role='row']")) || btn.closest("tr, [role='row']");
-    if (!row) return null;
-
-    // 1) Best case: explicit device link inside the row
-    let link = row.querySelector('a[href^="/sup/device/"]');
-
-    // 2) Fallback: first link found in the first cell of the row
-    if (!link) {
-        const firstCell = row.querySelector("td, [role='cell']");
-        link = firstCell ? firstCell.querySelector("a") : null;
-    }
-
-    // Extract and trim text content
-    const text = (link?.textContent || "").trim();
-    return text || null;
-}
-
 // Build a native-like menu entry (container -> contents -> anchor) using classes from an existing item
 function buildAnchoredMenuItem(container, label, href, onClick) {
     // Find a reference native menuitem (<a role="menuitem"> or <span role="menuitem">)
@@ -684,20 +651,6 @@ function buildChevronRightIconSvg() {
     return svg;
 }
 
-// Distinguish Investigations vs Device View based on aria-label pattern
-function parseActionsFor(label) {
-    if (!label) return null;
-    const s = String(label).trim();
-    // Captures either: row + column, or a single entity name
-    const re = /^Actions?\s+for\s+(?:(?:row\s+(\d+),\s+column\s+(.+))|(.+))$/i;
-    const m = re.exec(s);
-    if (!m) return null;
-    if (m[1] !== undefined) {
-        return { type: 'row', row: Number(m[1]), column: (m[2] || '').trim() };
-    }
-    return { type: 'device', name: (m[3] || '').trim() };
-}
-
 // Returns the column name for the kebab button element (rootMenuEl)
 function getNqaColumnNameFromKebab(rootMenuEl) {
     try {
@@ -733,17 +686,6 @@ function getSafeId(rootMenuEl) {
         id = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(id) : id.replace(/"/g, '\\"');
     }
     return id;
-}
-
-// Attempt to read the device name from the Device View header (h1)
-function getHeaderDeviceNameFromDeviceView() {
-    try {
-        const header = document.querySelector('[aria-label="Support header"]');
-        if (!header) return '';
-        const h1 = header.querySelector('h1[title], h1');
-        const text = (h1?.getAttribute('title') || h1?.textContent || '').trim();
-        return text || '';
-    } catch (_) { return ''; }
 }
 
 // Generic injection into a discovered native actions menu (Device View, etc.)
@@ -953,9 +895,6 @@ function buildDeviceViewPlaceholder() {
             }
         }
     } catch (_) {}
-    if (!Object.prototype.hasOwnProperty.call(obj.rawValues, 'ad_name')) {
-        try { obj.rawValues.ad_name = obj.rawValues.ad_name; } catch (_) {}
-    }
     return obj;
 }
 

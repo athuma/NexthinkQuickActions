@@ -91,6 +91,30 @@
                     "url"
                 ]
             }
+        },
+        "exportPrefs": {
+            "type": "object",
+            "description": "Export preferences applied to selection export helpers",
+            "properties": {
+                "csvDelimiter": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 3,
+                    "default": ",",
+                    "description": "Delimiter used when generating CSV downloads (1-3 characters)"
+                },
+                "clipboardFormat": {
+                    "type": "string",
+                    "enum": [
+                        "html",
+                        "markdown",
+                        "ascii",
+                        "tsv"
+                    ],
+                    "default": "html",
+                    "description": "Format applied to clipboard exports (HTML table, Markdown, ASCII, or TSV)"
+                }
+            }
         }
     }
 }

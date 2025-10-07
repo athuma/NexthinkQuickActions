@@ -189,76 +189,100 @@
         return count;
     }
 
+    // Locate the navigation menubar that hosts the Nexthink quick actions toggle.
+    function findMenubarList() {
+        const uls = document.querySelectorAll("nav ul[role='menubar']");
+        if (!uls.length) return null;
+        return uls[uls.length - 1] || null;
+    }
+
+    // Clone the template menu item so we inherit Nexthink styling for the cheatsheet toggle.
+    function cloneMenuItemForCheatsheet(templateItem) {
+        if (!templateItem) return { item: null, primaryAnchor: null };
+        const clone = templateItem.cloneNode(true);
+        clone.id = "nqa-cheatsheet-toggle";
+        const anchor = clone.querySelector('a[role="menuitem"], a');
+        return { item: clone, primaryAnchor: anchor || null };
+    }
+
+    // Remove existing icon/text from the anchor and inject the Quick Actions spark.
+    function decoratePrimaryAnchor(anchor, templateItem) {
+        if (!anchor) return;
+        while (anchor.firstChild) anchor.removeChild(anchor.firstChild);
+        anchor.removeAttribute("id");
+        anchor.title = "QuickAction – Placeholders";
+        anchor.setAttribute("aria-label", "QuickAction – Placeholders");
+        anchor.setAttribute("aria-haspopup", "false");
+        anchor.setAttribute("tabindex", "-1");
+        const svgColor = templateItem
+            ?.querySelector("svg")
+            ?.getAttribute("color") || "currentColor";
+        try {
+            const svg =
+                typeof buildQuickActionsIconSvg === "function"
+                    ? buildQuickActionsIconSvg(true)
+                    : null;
+            if (svg) {
+                svg.setAttribute("width", "16");
+                svg.setAttribute("height", "16");
+                svg.setAttribute("color", svgColor);
+                anchor.appendChild(svg);
+                return;
+            }
+        } catch (_) {
+            /* fallback handled below */
+        }
+        anchor.textContent = "QuickAction";
+    }
+
+    // Update the textual anchor (if any) so the label matches the new toggle purpose.
+    function decorateTitleAnchor(listItem, primaryAnchor) {
+        const anchors = Array.from(listItem.querySelectorAll("a"));
+        const titleAnchor = anchors.find((el) => el !== primaryAnchor);
+        if (!titleAnchor) return;
+        titleAnchor.removeAttribute("id");
+        const titleDiv = titleAnchor.querySelector("div") || null;
+        if (titleDiv) {
+            titleDiv.textContent = "QuickAction";
+            try {
+                titleDiv.setAttribute("title", "QuickAction");
+            } catch (_) {}
+        } else {
+            titleAnchor.textContent = "QuickAction";
+        }
+    }
+
+    // Append a cloned separator so the toggle remains visually aligned with existing entries.
+    function appendMenuSeparator(menu) {
+        const sep = menu.querySelector("hr");
+        if (!sep) return;
+        try {
+            const clone = sep.cloneNode(true);
+            clone.id = "nqa-cheatsheet-separator";
+            menu.appendChild(clone);
+        } catch (_) {}
+    }
+
+    // Inject the cheatsheet toggle into the Nexthink menubar if it is not already present.
     function injectToggleIntoMenubar() {
         try {
-            // There can be multiple menubar ULs; pick the correct one.
-            const uls = document.querySelectorAll("nav ul[role='menubar']");
-            if (uls.length === 0) return null;
-            const ul = uls[uls.length - 1]; // take last one
-            if (!ul) return null;
+            const menu = findMenubarList();
+            if (!menu) return null;
             let exist = document.getElementById("nqa-cheatsheet-toggle");
             if (exist) return exist;
-            // Clone last item to inherit styles and structure
-            const lastItem = ul.querySelector(
+            const templateItem = menu.querySelector(
                 "li[data-testid='item-container']:last-child"
             );
-            if (!lastItem) return null;
-            const li = lastItem.cloneNode(true);
-            // Clean content of the main icon anchor
-            const a = li.querySelector('a[role="menuitem"], a');
-            if (!a) return null; // expected structure in this application
-            while (a.firstChild) a.removeChild(a.firstChild);
-            li.id = "nqa-cheatsheet-toggle";
-            a.removeAttribute("id");
-            a.title = "QuickAction – Placeholders";
-            a.setAttribute("aria-label", "QuickAction – Placeholders");
-            a.setAttribute("aria-haspopup", "false");
-            a.setAttribute("tabindex", "-1");
-            try {
-                const svgColor =
-                    lastItem.querySelector("svg")?.getAttribute("color") ||
-                    "currentColor";
-                const svg =
-                    typeof buildQuickActionsIconSvg === "function"
-                        ? buildQuickActionsIconSvg(true)
-                        : null;
-                if (svg) {
-                    svg.setAttribute("width", "16");
-                    svg.setAttribute("height", "16");
-                    svg.setAttribute("color", svgColor);
-                    a.appendChild(svg);
-                } else {
-                    a.textContent = "QuickAction";
-                }
-            } catch (_) {
-                a.textContent = "QuickAction";
-            }
-            // Update the title wrapper anchor (second <a>), if present
-            try {
-                const anchors = Array.from(li.querySelectorAll("a"));
-                const titleAnchor = anchors.find((el) => el !== a);
-                if (titleAnchor) {
-                    titleAnchor.removeAttribute("id");
-                    const titleDiv = titleAnchor.querySelector("div") || null;
-                    if (titleDiv) {
-                        titleDiv.textContent = "QuickAction";
-                        try {
-                            titleDiv.setAttribute("title", "QuickAction");
-                        } catch (_) {}
-                    } else {
-                        titleAnchor.textContent = "QuickAction";
-                    }
-                }
-            } catch (_) {}
-            // Insert separator clone (before our item) if available in this UL
-            const sep = ul.querySelector("hr");
-            if (sep) {
-                const clone = sep.cloneNode(true);
-                clone.id = "nqa-cheatsheet-separator";
-                ul.appendChild(clone);
-            }
-            ul.appendChild(li);
-            return li;
+            if (!templateItem) return null;
+            const { item, primaryAnchor } = cloneMenuItemForCheatsheet(
+                templateItem
+            );
+            if (!item || !primaryAnchor) return null;
+            decoratePrimaryAnchor(primaryAnchor, templateItem);
+            decorateTitleAnchor(item, primaryAnchor);
+            appendMenuSeparator(menu);
+            menu.appendChild(item);
+            return item;
         } catch (_) {
             return null;
         }
@@ -307,6 +331,7 @@
         } catch (_) {}
     }
 
+    // Install the quick cheatsheet toggle + panel for the given Nexthink context (Device View / Investigations).
     function mount(context) {
         const ctx = context || getPageContext();
         if (!isSupportedPage(ctx)) return false;
@@ -348,31 +373,30 @@
                 }
             }, 150);
         };
+        // Determine whether the supplied node belongs to the cheatsheet UI so we can ignore self-induced mutations.
+        const isCheatsheetElement = (node) => {
+            if (!node || !(node instanceof Element)) return false;
+            if (panel.contains && panel.contains(node)) return true;
+            if (toggle && toggle.contains && toggle.contains(node)) return true;
+            return false;
+        };
+
+        // Check if a given mutation touches the cheatsheet toggle or panel, in which case the change should be ignored.
+        const mutationTouchesCheatsheet = (mutation) => {
+            if (isCheatsheetElement(mutation.target)) return true;
+            const nodes = mutation.addedNodes;
+            if (!nodes || !nodes.length) return false;
+            for (const node of nodes) {
+                if (isCheatsheetElement(node)) return true;
+            }
+            return false;
+        };
+
+        // Observe the DOM and refresh the cheatsheet when the underlying Nexthink table changes.
         const mo = new MutationObserver((muts) => {
             if (panel.hidden) return;
-            for (const m of muts) {
-                const t = m.target;
-                if (
-                    panel.contains(t) ||
-                    (toggle && toggle.contains && toggle.contains(t))
-                )
-                    continue;
-                let skip = false;
-                if (m.addedNodes && m.addedNodes.length) {
-                    for (const n of m.addedNodes) {
-                        if (
-                            n instanceof Element &&
-                            (panel.contains(n) ||
-                                (toggle &&
-                                    toggle.contains &&
-                                    toggle.contains(n)))
-                        ) {
-                            skip = true;
-                            break;
-                        }
-                    }
-                }
-                if (skip) continue;
+            for (const mutation of muts) {
+                if (mutationTouchesCheatsheet(mutation)) continue;
                 schedulePopulate();
                 break;
             }
@@ -384,7 +408,7 @@
         return true;
     }
 
-    // Defer mounting until page is ready and a supported context is detected (SPA safe)
+    // Install the cheatsheet toggle once the Nexthink page is ready (supports SPA navigation).
     function scheduleMount() {
         const tryNow = () => {
             const ctx = getPageContext();

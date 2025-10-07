@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -64,28 +64,28 @@
               <span class="field-label">Clipboard format</span>
               <div class="radio-group" id="clipboardFormatGroup">
                 <label class="radio-option">
-                  <input type="radio" name="clipboardFormat" value="markdown" checked />
+                  <input type="radio" name="clipboardFormat" value="html" checked />
+                  <span>HTML table</span>
+                </label>
+                <label class="radio-option">
+                  <input type="radio" name="clipboardFormat" value="markdown" />
                   <span>Markdown</span>
                 </label>
                 <label class="radio-option">
                   <input type="radio" name="clipboardFormat" value="ascii" />
                   <span>ASCII table</span>
                 </label>
-                <label class="radio-option">
-                  <input type="radio" name="clipboardFormat" value="html" />
-                  <span>HTML table</span>
-                </label>
               </div>
               <div class="help-text">Choose how copied selections are formatted.</div>
             </div>
           </div>
           <div class="section-footer">
-            <button class="btn btn-success" id="exportSaveBtn" type="button">Save</button>
             <span class="save-status" id="exportSaveStatus" role="status" aria-live="polite"></span>
+            <button class="btn btn-success" id="exportSaveBtn" type="button">Save</button>
           </div>
         </section>
         <!-- Floating Add button at bottom-right of panel content -->
-        <button class="btn add-floating" id="addBtn" type="button" aria-label="Add menu entry">Add</button>
+        <button class="btn add-floating" id="addFloatingBtn" type="button" aria-label="Add menu entry">Add</button>
       </div>
       <div class="toolbar">
         <button class="btn" id="templateBtn" type="button">Templates</button>

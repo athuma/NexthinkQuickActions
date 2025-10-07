@@ -6,33 +6,39 @@
 
   class NqaImportExportToolbar {
     constructor(opts) {
-      this.opts = opts || {};
-      const els = this.opts.els || {};
-      this.importBtn = els.importBtn || null;
-      this.exportBtn = els.exportBtn || null;
-      this.importFile = els.importFile || null;
-      // Import modal controls
-      this.importModal = els.importModal || null;
-      this.importSummary = els.importSummary || null;
-      this.importCancelBtn = els.importCancelBtn || null;
-      this.importAddBtn = els.importAddBtn || null;
-      this.importReplaceBtn = els.importReplaceBtn || null;
+        this.opts = opts || {};
+        this._initDomElements(this.opts.els || {});
 
-      // Store API (required): getMenu, setMenu, getInstance, setInstance
-      this.store = this.opts.store || null;
-      // Optional callbacks
-      this.onMenuChanged = typeof this.opts.onMenuChanged === 'function' ? this.opts.onMenuChanged : null;
-      this.onInstanceChanged = typeof this.opts.onInstanceChanged === 'function' ? this.opts.onInstanceChanged : null;
+        // Store API (required): getMenu, setMenu, getInstance, setInstance
+        this.store = this.opts.store || null;
 
-      // Validators (can be overridden)
-      this.isValidNqaUrl = this.opts.isValidNqaUrl || this._isValidNqaUrl;
-      this.isValidInstanceUrl = this.opts.isValidInstanceUrl || this._isValidInstanceUrl;
+        // Optional callbacks
+        this.onMenuChanged = typeof this.opts.onMenuChanged === 'function' ? this.opts.onMenuChanged : null;
+        this.onInstanceChanged = typeof this.opts.onInstanceChanged === 'function' ? this.opts.onInstanceChanged : null;
 
-      // Internal pending state
-      this._pendingItems = null; // array
-      this._pendingInstance = undefined; // object | null | undefined
+        // Validators (can be overridden)
+        this.isValidNqaUrl = this.opts.isValidNqaUrl || this._isValidNqaUrl;
+        this.isValidInstanceUrl = this.opts.isValidInstanceUrl || this._isValidInstanceUrl;
+
+        // Internal pending state
+        this._pendingItems = null;
+        this._pendingInstance = undefined;
     }
 
+    // Initializes DOM elements references from provided elements map
+    _initDomElements(els) {
+        this.importBtn = els.importBtn || null;
+        this.exportBtn = els.exportBtn || null;
+        this.importFile = els.importFile || null;
+        // Import modal controls
+        this.importModal = els.importModal || null;
+        this.importSummary = els.importSummary || null;
+        this.importCancelBtn = els.importCancelBtn || null;
+        this.importAddBtn = els.importAddBtn || null;
+        this.importReplaceBtn = els.importReplaceBtn || null;
+    }
+
+    // Attaches event listeners to DOM elements
     attach() {
       if (this.exportBtn) this.exportBtn.addEventListener('click', () => this._onExport());
       if (this.importBtn) this.importBtn.addEventListener('click', () => {
@@ -45,6 +51,7 @@
       if (this.importReplaceBtn) this.importReplaceBtn.addEventListener('click', () => this._finalizeReplace());
     }
 
+    // Handles export button click - downloads current configuration as JSON
     async _onExport() {
       try {
         if (!this.store?.exportToDownload) throw new Error('Store missing exportToDownload');
@@ -54,47 +61,81 @@
       }
     }
 
+    // Handles file input change - processes imported JSON configuration
     async _onImportFile(ev) {
-      const file = ev?.target?.files && ev.target.files[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        let parsed = null;
-        try { parsed = JSON.parse(text); } catch (_) { parsed = null; }
-        const arr = Array.isArray(parsed?.menu) ? parsed.menu : null;
-        if (!Array.isArray(arr)) { this._alert('Invalid JSON format (expected {"menu": [...], "instance"?: {...}})'); return this._resetFile(ev); }
+        const file = ev?.target?.files && ev.target.files[0];
+        if (!file) return;
 
-        const clean = [];
-        for (const it of arr) {
-          const name = String((it?.name ?? it?.label ?? '')).trim();
-          const url = String(it?.url ?? '').trim();
-          if (!name || !url) continue;
-          if (!this.isValidNqaUrl(url)) continue;
-          clean.push({ name, url });
+        try {
+            const text = await file.text();
+            const parsed = this._parseImportFile(text);
+            if (!parsed) return this._resetFile(ev);
+
+            const clean = this._validateMenuItems(parsed.menu);
+            if (!clean.length) {
+                this._alert('No valid entries to import');
+                return this._resetFile(ev);
+            }
+
+            this._pendingInstance = this._validateInstance(parsed.instance);
+            await this._handleImport(clean);
+        } catch (e) {
+            this._alert('Import failed');
+        } finally {
+            this._resetFile(ev);
         }
-        if (!clean.length) { this._alert('No valid entries to import'); return this._resetFile(ev); }
-
-        // Instance is optional (null to clear, or {name,url})
-        const importedInst = (parsed && typeof parsed === 'object') ? (parsed.instance ?? undefined) : undefined;
-        this._pendingInstance = (importedInst === null || (importedInst && typeof importedInst.name === 'string' && typeof importedInst.url === 'string'))
-          ? importedInst : undefined;
-
-        const existing = await this.store.getMenu();
-        if (existing && existing.length) {
-          this._pendingItems = clean;
-          this._showImportModal(`${clean.length} menu item(s) detected${(this._pendingInstance!==undefined)?' + instance':''}. Choose: Add or Replace.`);
-        } else {
-          await this.store.setMenu(clean);
-          await this._maybeApplyInstanceOnImport();
-          if (typeof this.onMenuChanged === 'function') try { this.onMenuChanged(); } catch (_) {}
-        }
-      } catch (e) {
-        this._alert('Import failed');
-      } finally {
-        this._resetFile(ev);
-      }
     }
 
+    // Parse and validate imported JSON file structure
+    _parseImportFile(text) {
+        try {
+            const parsed = JSON.parse(text);
+            const arr = Array.isArray(parsed?.menu) ? parsed.menu : null;
+            if (!Array.isArray(arr)) {
+                this._alert('Invalid JSON format (expected {"menu": [...], "instance"?: {...}})');
+                return null;
+            }
+            return parsed;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // Validate and clean menu items array
+    _validateMenuItems(arr) {
+        const clean = [];
+        for (const it of arr) {
+            const name = String((it?.name ?? it?.label ?? '')).trim();
+            const url = String(it?.url ?? '').trim();
+            if (!name || !url) continue;
+            if (!this.isValidNqaUrl(url)) continue;
+            clean.push({ name, url });
+        }
+        return clean;
+    }
+
+    // Validate imported instance configuration
+    _validateInstance(importedInst) {
+        if (importedInst === undefined) return undefined;
+        return (importedInst === null || (importedInst && typeof importedInst.name === 'string' && typeof importedInst.url === 'string'))
+            ? importedInst
+            : undefined;
+    }
+
+    // Process import based on current configuration state
+    async _handleImport(clean) {
+        const existing = await this.store.getMenu();
+        if (existing && existing.length) {
+            this._pendingItems = clean;
+            this._showImportModal(`${clean.length} menu item(s) detected${(this._pendingInstance!==undefined)?' + instance':''}. Choose: Add or Replace.`);
+        } else {
+            await this.store.setMenu(clean);
+            await this._maybeApplyInstanceOnImport();
+            if (typeof this.onMenuChanged === 'function') try { this.onMenuChanged(); } catch (_) {}
+        }
+    }
+
+    // Finalizes import by adding new items to existing configuration
     async _finalizeAdd() {
       try {
         const existing = await this.store.getMenu();
@@ -107,6 +148,7 @@
       finally { this._closeImportModal(true); }
     }
 
+    // Finalizes import by replacing existing configuration with new items
     async _finalizeReplace() {
       try {
         const items = Array.isArray(this._pendingItems) ? this._pendingItems : [];
@@ -117,6 +159,7 @@
       finally { this._closeImportModal(true); }
     }
 
+    // Applies imported instance configuration if present
     async _maybeApplyInstanceOnImport() {
       if (this._pendingInstance === undefined) return;
       try {
@@ -134,20 +177,27 @@
       } catch (_) { /* ignore */ }
     }
 
+    // Shows the import modal with given summary text
     _showImportModal(summaryText) {
       try { if (this.importSummary) this.importSummary.textContent = summaryText || ''; } catch (_) {}
       try { if (this.importModal) this.importModal.hidden = false; } catch (_) {}
     }
+
+    // Closes the import modal and optionally resets pending state
     _closeImportModal(resetPending) {
       try { if (this.importModal) this.importModal.hidden = true; } catch (_) {}
       if (resetPending) { this._pendingItems = null; this._pendingInstance = undefined; }
     }
+
+    // Resets the file input value to allow re-selection of the same file
     _resetFile(ev) {
       try { if (this.importFile) this.importFile.value = ''; } catch (_) {}
     }
+
+    // Safe alert wrapper
     _alert(msg) { try { alert(msg); } catch (_) {} }
 
-    // Default validators (can be overridden via opts)
+    // Validates if a URL contains required placeholders and has valid format
     _isValidNqaUrl(str) {
       const s = String(str || '').trim();
       const PH_RE = /\{[A-Za-z0-9_:-]+\}/g;
@@ -158,6 +208,8 @@
         return (u.protocol === 'http:' || u.protocol === 'https:') && !!u.hostname;
       } catch (_) { return false; }
     }
+
+    // Validates if a URL is a valid instance URL (no placeholders, no trailing slash, no query/hash)
     _isValidInstanceUrl(str) {
       const s = String(str || '').trim();
       if (!s) return false;

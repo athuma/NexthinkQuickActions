@@ -56,7 +56,7 @@
 
   const DEFAULT_EXPORT_PREFS = {
     csvDelimiter: ',',
-    clipboardFormat: 'markdown',
+    clipboardFormat: 'html',
   };
 
   const VALID_CLIPBOARD_FORMATS = new Set(['markdown', 'ascii', 'html', 'tsv']);
@@ -272,7 +272,8 @@
     async exportAsObject() {
       const menu = await this.getMenu();
       const instance = await this.getInstance();
-      const exportPrefs = await this.getExportPrefs();
+      const exportPrefsRaw = await this.getExportPrefs();
+      const exportPrefs = NqaConfigStore.sanitizeExportPrefs(exportPrefsRaw);
       const version = await this.getStorageVersion();
       const plainInstance = instance ? augmentInstance(sanitizeInstance(instance)) : null;
       return { menu, instance: plainInstance, exportPrefs, version };
@@ -378,6 +379,20 @@
 
     async getExportPrefs() {
       await this.ensureAndMigrateStorage();
+      const managed = await getManagedAll();
+      const pol = await this.getManagedPolicy(managed);
+      if (pol.mode !== 'seed') {
+        const rawManaged = managed?.exportPrefs;
+        if (rawManaged && typeof rawManaged === 'object') {
+          // Honor managed defaults when present so policies take precedence over user sync data
+          const prefs = NqaConfigStore.sanitizeExportPrefs(rawManaged);
+          return {
+            ...prefs,
+            __managed: true,
+            __locked: !!pol.lockManagedEntries,
+          };
+        }
+      }
       const def = { [NqaConfigStore.KEYS.EXPORT]: DEFAULT_EXPORT_PREFS };
       const res = await promisifyGet(def);
       const raw = res?.[NqaConfigStore.KEYS.EXPORT];

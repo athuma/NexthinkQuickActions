@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const menuTable = document.querySelector("#menuSection .cfg-table");
     const empty = document.getElementById("emptyState");
     const addBtn = document.getElementById("addBtn");
+    const addFloatingBtn = document.getElementById("addFloatingBtn");
     // Instance section DOM
     const instSection = document.getElementById("instanceSection");
     const instAddBtn = document.getElementById("instAddBtn");
@@ -267,10 +268,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const DEFAULT_EXPORT_PREFS = window.NqaConfigStore
         ?.DEFAULT_EXPORT_PREFS || {
         csvDelimiter: ",",
-        clipboardFormat: "markdown",
+        clipboardFormat: "html",
     };
 
     let exportStatusTimer = null;
+    let currentExportPrefs = {
+        csvDelimiter: DEFAULT_EXPORT_PREFS.csvDelimiter,
+        clipboardFormat: DEFAULT_EXPORT_PREFS.clipboardFormat,
+    };
 
     const toDisplayDelimiter = (value) => (value === "\t" ? "\\t" : value);
     const fromDisplayDelimiter = (value) => (value === "\\t" ? "\t" : value);
@@ -306,9 +311,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const populateExportForm = (prefs) => {
         const effective = { ...DEFAULT_EXPORT_PREFS, ...(prefs || {}) };
         if (csvDelimiterInput) {
-            csvDelimiterInput.value = toDisplayDelimiter(
-                effective.csvDelimiter
-            );
+            csvDelimiterInput.value = toDisplayDelimiter(effective.csvDelimiter);
+            currentExportPrefs.csvDelimiter = fromDisplayDelimiter(
+                csvDelimiterInput.value
+            ) || DEFAULT_EXPORT_PREFS.csvDelimiter;
         }
         if (clipboardFormatRadios.length) {
             const acceptable = ["markdown", "ascii", "html"];
@@ -316,7 +322,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? effective.clipboardFormat
                 : DEFAULT_EXPORT_PREFS.clipboardFormat;
             setSelectedClipboardFormat(fmt);
+            currentExportPrefs.clipboardFormat = fmt;
         }
+        updateExportSaveState();
     };
 
     const broadcastExportPrefs = (prefs) => {
@@ -374,21 +382,70 @@ document.addEventListener("DOMContentLoaded", () => {
             broadcastExportPrefs(saved);
         } catch (err) {
             showExportStatus("Unable to save preferences.", true);
-        } finally {
-            exportSaveBtn.disabled = false;
         }
+        updateExportSaveState();
     };
 
     if (csvDelimiterInput) {
         csvDelimiterInput.addEventListener("input", () => {
             if (csvDelimiterErr) csvDelimiterErr.hidden = true;
+            updateExportSaveState();
         });
     }
 
     if (exportSaveBtn)
         exportSaveBtn.addEventListener("click", () => handleExportSave());
 
+    if (addBtn && addFloatingBtn) {
+        addFloatingBtn.addEventListener("click", () => {
+            if (addBtn.disabled) return;
+            addBtn.click();
+        });
+        const syncAddButtons = () => {
+            addFloatingBtn.disabled = !!addBtn.disabled;
+        };
+        syncAddButtons();
+        if (typeof MutationObserver !== "undefined") {
+            const observer = new MutationObserver(syncAddButtons);
+            observer.observe(addBtn, {
+                attributes: true,
+                attributeFilter: ["disabled"],
+            });
+        }
+    }
+
+    const getFormDelimiter = () =>
+        fromDisplayDelimiter(csvDelimiterInput?.value || "");
+
+    const getFormClipboardFormat = () =>
+        getSelectedClipboardFormat() || DEFAULT_EXPORT_PREFS.clipboardFormat;
+
+    const isExportFormDirty = () => {
+        const delimiter = getFormDelimiter();
+        if (!delimiter) return false;
+        const format = getFormClipboardFormat();
+        return (
+            delimiter !== currentExportPrefs.csvDelimiter ||
+            format !== currentExportPrefs.clipboardFormat
+        );
+    };
+
+    function updateExportSaveState() {
+        if (!exportSaveBtn) return;
+        const delimiter = getFormDelimiter();
+        if (!delimiter) {
+            exportSaveBtn.disabled = true;
+            return;
+        }
+        exportSaveBtn.disabled = !isExportFormDirty();
+    }
+
+    clipboardFormatRadios.forEach((radio) => {
+        radio.addEventListener("change", () => updateExportSaveState());
+    });
+
     loadExportPrefs();
+    updateExportSaveState();
 
     // Icons rendered via CSS masks; no runtime URL required
 
