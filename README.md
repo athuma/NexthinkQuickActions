@@ -8,7 +8,7 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - **Cheat-sheet toggle** – adds a QuickAction icon to the Nexthink top menubar that reveals a panel listing all detected column placeholders, with one-click copy to help authors build URLs.
 - **Friendly configuration surface** – an options page to maintain the Nexthink instance URL, manage quick action rows, reorder entries, tune export preferences, and import/export JSON bundles.
 - **Investigation export helpers** – augments the bulk-selection toolbar with NQA-branded actions to copy selected rows (Markdown, ASCII, or HTML) or download a CSV using your preferred separator.
-- **Policy-driven deployment** – supports Chrome managed storage, including overlay vs seed modes, so administrators can pre-load and lock menus or instance settings. Sample payloads are available in `debug/`.
+- **Policy-driven deployment** – supports Chrome managed storage, including overlay vs seed modes, so administrators can pre-load and lock menus, instance settings, or export preferences. Sample payloads and deployment scripts are available in `managed-config-examples/`.
 
 ## Configuration workflow
 ### Accessing the options page
@@ -27,9 +27,9 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - The expected structure matches `debug/NQA_Configuration+wildcard.json`:
   ```json
   {
-    "menu": [{ "name": "Ouvrir dans ServiceNow", "url": "https://…{devices_name}…" }],
-    "instance": { "name": "PROD", "url": "http://corp.eu.nexthink.cloud" },
-    "version": "1.0.0"
+    "menu": [{ "name": "Open in ServiceNow", "url": "https://…{devices_name}…" }],
+    "instance": { "name": "PROD", "url": "https://corp.eu.nexthink.cloud" },
+    "exportPrefs": { "csvDelimiter": ",", "clipboardFormat": "html" },
   }
   ```
 
@@ -38,7 +38,8 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - Policies accept two modes:
   - **Overlay** (default): managed entries are merged into the user list. Flags `allowUserEntries` and `lockManagedEntries` control whether users may add/edit their own entries.
   - **Seed**: managed data seeds the user profile once. With `seedReplace=true`, it overwrites any existing configuration on first load.
-- For Chrome Enterprise or macOS deployment, adapt `MobileProfiles/NQA_Chrome_Managed.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance and menu under `ExtensionSettings`.
+- For Chrome Enterprise or macOS deployment, adapt `managed-config-examples/Chrome_Work1.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance, menu, and export preferences under `ExtensionSettings`.
+- The same directory also contains Intune remediation/compliance scripts (`NQARemediation.ps1`, `NQAChecking.ps1`) that align with the managed schema.
 - See the [managed policy behaviour matrix](docs/managed-policy-matrix.md) for detailed combinations and their impact on end users.
 
 ## Runtime behaviour in Nexthink

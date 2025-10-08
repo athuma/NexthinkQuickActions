@@ -7,6 +7,7 @@ const SELECTION_MENU_ATTR = 'data-nqa-export-menu';
 const SELECTION_BUTTON_ATTR = 'data-nqa-export-action';
 const SELECTION_FALLBACK_ID = 'nqa-export-floating-bar';
 const SELECTION_ACTION_STYLE_ID = 'nqa-export-action-style';
+const SELECTION_ACTION_BAR_SELECTOR = 'div[data-insights="undefined_action-bar"]';
 let currentSubmenuTrigger = null; // track open submenu trigger for toggle
 let cleanupFn = null; // cleanup for global listeners
 
@@ -1010,7 +1011,11 @@ function ensureSelectionActionStyles() {
         #${SELECTION_FALLBACK_ID}.show{display:flex}
         #${SELECTION_FALLBACK_ID} .nqa-export-action-btn{border-color:rgba(255,255,255,0.2)}
         @media (prefers-color-scheme: dark){#${SELECTION_FALLBACK_ID}{background:rgba(17,17,17,0.92);box-shadow:0 8px 24px rgba(0,0,0,0.4),0 2px 4px rgba(0,0,0,0.32)}#${SELECTION_FALLBACK_ID} .nqa-export-action-btn{border-color:rgba(255,255,255,0.3)}}
-    `;
+        html[data-theme="light"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn{background:#121212;color:#f6f7fb;border:0;text-align:left;width:100%;display:block}
+        html[data-theme="light"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn:hover{background:#1f1f1f}
+        html[data-theme="dark"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn{background:#ffffff;color:#1f1f1f;border:0;text-align:left;width:100%;display:block}
+        html[data-theme="dark"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn:hover{background:#f4f4f4}
+        `;
     document.head.appendChild(style);
 }
 
@@ -1120,13 +1125,17 @@ function buildSparkIconMenuItem(container) {
 
 // Produce a human-friendly toast message describing the export outcome.
 function buildSelectionFeedback(action, payload) {
-    const count = Array.isArray(payload?.rows) ? payload.rows.length : 0;
-    const total = typeof payload?.totalSelected === 'number' ? payload.totalSelected : count;
-    const limit = typeof payload?.limitUsed === 'number' ? payload.limitUsed : (window.NqaExport?.MAX_ROWS_DEFAULT || 200);
-    const noun = count === 1 ? 'row' : 'rows';
-    if (!count) return action === 'download' ? 'No rows exported.' : 'No rows copied.';
     const verb = action === 'download' ? 'Exported' : 'Copied';
+    const rows = payload?.rows;
+    if (!Array.isArray(rows) || rows.length === 0) return `No rows ${verb.toLowerCase()}.`;
+
+    const count = rows.length;
+    const noun = count === 1 ? 'row' : 'rows';
+    const total = typeof payload?.totalSelected === 'number' ? payload.totalSelected : count;
     if (payload?.truncated && total > count) {
+        const limit = typeof payload?.limitUsed === 'number'
+            ? payload.limitUsed
+            : window.NqaExport?.MAX_ROWS_DEFAULT || 200;
         return `${verb} ${count} of ${total} ${noun} (limit ${limit}).`;
     }
     return `${verb} ${count} ${noun}.`;
@@ -1138,35 +1147,40 @@ function isElementVisible(el) {
     try {
         const cs = window.getComputedStyle(el);
         if (!cs || cs.display === 'none' || cs.visibility === 'hidden') return false;
-        const opacity = parseFloat(cs.opacity || '1');
-        if (opacity === 0) return false;
+        if (parseFloat(cs.opacity || '1') === 0) return false;
         const rect = el.getBoundingClientRect();
         return rect && rect.width > 0 && rect.height > 0;
     } catch (_) { return false; }
 }
 
-// Locate the currently visible selection bulk-action container provided by Nexthink.
-function findSelectionMenuContainer() {
-    const table = selectionTableRef || document.querySelector(INVESTIGATION_TABLE_SELECTOR);
-    const roots = [];
-    if (table) {
-        if (table.parentElement) roots.push(table.parentElement);
-        if (table.parentElement?.parentElement) roots.push(table.parentElement.parentElement);
-    }
-    roots.push(document.body);
-    for (const root of roots) {
-        if (!root) continue;
-        for (const selector of SELECTION_MENU_SELECTORS) {
-            try {
-                const candidate = root.querySelector(selector);
-                if (!candidate) continue;
-                if (candidate.id && candidate.id === SELECTION_FALLBACK_ID) continue;
-                if (!isElementVisible(candidate)) continue;
-                return candidate;
-            } catch (_) { /* ignore */ }
-        }
+// Return the selection action menu rendered inside the portalized action bar, if any.
+function findSelectionMenuViaActionBar() {
+    const nodes = document.querySelectorAll(SELECTION_ACTION_BAR_SELECTOR);
+    for (const node of nodes) {
+        if (!node || !isElementVisible(node)) continue;
+        const menu = node.querySelector('[role="menu"]');
+        if (menu && isElementVisible(menu)) return menu;
     }
     return null;
+}
+
+// Legacy fallback: scan known selectors in case the action bar attribute is unavailable.
+function findSelectionMenuViaFallbackSelectors() {
+    for (const selector of SELECTION_MENU_SELECTORS) {
+        const candidate = document.querySelector(selector);
+        if (!candidate) continue;
+        if (candidate.id && candidate.id === SELECTION_FALLBACK_ID) continue;
+        //if (!isElementVisible(candidate)) continue;
+        return candidate;
+    }
+    return null;
+}
+
+// Locate the currently visible selection bulk-action container provided by Nexthink.
+function findSelectionMenuContainer() {
+    const portalMenu = findSelectionMenuViaActionBar();
+    if (portalMenu) return portalMenu;
+    return findSelectionMenuViaFallbackSelectors();
 }
 
 // Remove previously injected export buttons and clean their event handlers.
@@ -1191,7 +1205,7 @@ function injectSelectionMenu(menu) {
     }
 
     const copyEntry = buildSelectionMenuEntry(menu, 'Copy selection', handleSelectionCopy);
-    const csvEntry = buildSelectionMenuEntry(menu, 'Download CSV', handleSelectionDownload);
+    const csvEntry = buildSelectionMenuEntry(menu, 'Download\u00a0CSV', handleSelectionDownload);
     const frag = document.createDocumentFragment();
 
     const separatorBefore = buildMenuSeparator(menu) || document.createElement('div');

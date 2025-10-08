@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.4
+
+- Fix: Menu export buttons works with all tables.
+- Fix: CSV/clipboard feedback messages are streamlined for better readability and reduced code complexity.
+- Docs: README updated with the new `exportPrefs` options.
+- Chore: Add some configuration profiles to in `managed-config-examples/`.
+
 ## v1.0.3
 
 - Fix: Managed export preferences from policies now take precedence over sync defaults in the options UI.
