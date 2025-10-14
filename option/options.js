@@ -23,7 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const menuTable = document.querySelector("#menuSection .cfg-table");
     const empty = document.getElementById("emptyState");
     const addBtn = document.getElementById("addBtn");
-    const addFloatingBtn = document.getElementById("addFloatingBtn");
     // Instance section DOM
     const instSection = document.getElementById("instanceSection");
     const instAddBtn = document.getElementById("instAddBtn");
@@ -37,13 +36,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const templateList = document.getElementById("templateList");
     const templateCancelBtn = document.getElementById("templateCancelBtn");
     const templateAddBtn = document.getElementById("templateAddBtn");
-    const exportSaveBtn = document.getElementById("exportSaveBtn");
     const exportSaveStatus = document.getElementById("exportSaveStatus");
     const csvDelimiterInput = document.getElementById("csvDelimiterInput");
     const csvDelimiterErr = document.getElementById("csvDelimiterErr");
     const clipboardFormatRadios = Array.from(
         document.querySelectorAll('input[name="clipboardFormat"]')
     );
+    const modifierCard = document.getElementById("clipboardModifierCard");
+    const modifierAltLabel = document.getElementById("clipboardModifierAlt");
+    const modifierShiftLabel = document.getElementById("clipboardModifierShift");
+    const modifierAltRow = document.getElementById("clipboardModifierAltRow");
+    const modifierShiftRow = document.getElementById("clipboardModifierShiftRow");
     // Import modal elements
     const importModal = document.getElementById("importModal");
     const importSummary = document.getElementById("importSummary");
@@ -271,7 +274,9 @@ document.addEventListener("DOMContentLoaded", () => {
         clipboardFormat: "html",
     };
 
+    const EXPORT_AUTOSAVE_DELAY = 250;
     let exportStatusTimer = null;
+    let exportAutosaveTimer = null;
     let currentExportPrefs = {
         csvDelimiter: DEFAULT_EXPORT_PREFS.csvDelimiter,
         clipboardFormat: DEFAULT_EXPORT_PREFS.clipboardFormat,
@@ -289,6 +294,65 @@ document.addEventListener("DOMContentLoaded", () => {
         clipboardFormatRadios.forEach((radio) => {
             radio.checked = radio.value === format;
         });
+    };
+
+    const getFormatEntries = () => {
+        return clipboardFormatRadios.map((radio) => {
+            const labelSpan =
+                radio.closest(".radio-option")?.querySelector("span");
+            return {
+                value: radio.value,
+                label: labelSpan
+                    ? labelSpan.textContent.trim()
+                    : radio.value.toUpperCase(),
+            };
+        });
+    };
+
+    const updateClipboardModifierHints = () => {
+        if (!modifierCard) return;
+        const entries = getFormatEntries();
+        if (!entries.length) {
+            modifierCard.hidden = true;
+            return;
+        }
+        const selected =
+            getSelectedClipboardFormat() ||
+            DEFAULT_EXPORT_PREFS.clipboardFormat;
+        const selectedEntry =
+            entries.find((entry) => entry.value === selected) || entries[0];
+        const alternatives = entries.filter(
+            (entry) => entry.value !== selectedEntry.value
+        );
+
+        const pickEntry = (idx) => {
+            if (alternatives[idx]) return alternatives[idx];
+            if (alternatives.length) return alternatives[alternatives.length - 1];
+            return selectedEntry;
+        };
+
+        const altEntry = pickEntry(0);
+        const shiftEntry = pickEntry(1);
+
+        if (modifierAltLabel)
+            modifierAltLabel.textContent = altEntry?.label || "—";
+        if (modifierShiftLabel)
+            modifierShiftLabel.textContent = shiftEntry?.label || "—";
+
+        if (modifierAltRow) {
+            modifierAltRow.classList.toggle(
+                "modifier-disabled",
+                !altEntry || altEntry.value === selectedEntry.value
+            );
+        }
+        if (modifierShiftRow) {
+            modifierShiftRow.classList.toggle(
+                "modifier-disabled",
+                !shiftEntry || shiftEntry.value === selectedEntry.value
+            );
+        }
+
+        modifierCard.hidden = entries.length < 2;
     };
 
     const showExportStatus = (message, isError = false) => {
@@ -324,7 +388,7 @@ document.addEventListener("DOMContentLoaded", () => {
             setSelectedClipboardFormat(fmt);
             currentExportPrefs.clipboardFormat = fmt;
         }
-        updateExportSaveState();
+        updateClipboardModifierHints();
     };
 
     const broadcastExportPrefs = (prefs) => {
@@ -354,7 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const handleExportSave = async () => {
-        if (!csvDelimiterInput || !exportSaveBtn) return;
+        if (!csvDelimiterInput) return;
         const rawDelimiter = csvDelimiterInput.value
             ? csvDelimiterInput.value.trim()
             : "";
@@ -370,7 +434,13 @@ document.addEventListener("DOMContentLoaded", () => {
         let format = getSelectedClipboardFormat();
         if (!format) format = DEFAULT_EXPORT_PREFS.clipboardFormat;
 
-        exportSaveBtn.disabled = true;
+        if (
+            parsedDelimiter === currentExportPrefs.csvDelimiter &&
+            format === currentExportPrefs.clipboardFormat
+        ) {
+            return;
+        }
+
         showExportStatus("Saving…");
         try {
             const saved = await setExportPrefs({
@@ -383,69 +453,38 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (err) {
             showExportStatus("Unable to save preferences.", true);
         }
-        updateExportSaveState();
+    };
+
+    // Schedule a debounced save to avoid hammering storage on every keystroke.
+    const queueExportSave = () => {
+        if (exportAutosaveTimer) clearTimeout(exportAutosaveTimer);
+        exportAutosaveTimer = setTimeout(() => {
+            exportAutosaveTimer = null;
+            handleExportSave();
+        }, EXPORT_AUTOSAVE_DELAY);
     };
 
     if (csvDelimiterInput) {
         csvDelimiterInput.addEventListener("input", () => {
             if (csvDelimiterErr) csvDelimiterErr.hidden = true;
-            updateExportSaveState();
         });
-    }
-
-    if (exportSaveBtn)
-        exportSaveBtn.addEventListener("click", () => handleExportSave());
-
-    if (addBtn && addFloatingBtn) {
-        addFloatingBtn.addEventListener("click", () => {
-            if (addBtn.disabled) return;
-            addBtn.click();
+        csvDelimiterInput.addEventListener("change", () => {
+            queueExportSave();
         });
-        const syncAddButtons = () => {
-            addFloatingBtn.disabled = !!addBtn.disabled;
-        };
-        syncAddButtons();
-        if (typeof MutationObserver !== "undefined") {
-            const observer = new MutationObserver(syncAddButtons);
-            observer.observe(addBtn, {
-                attributes: true,
-                attributeFilter: ["disabled"],
-            });
-        }
-    }
-
-    const getFormDelimiter = () =>
-        fromDisplayDelimiter(csvDelimiterInput?.value || "");
-
-    const getFormClipboardFormat = () =>
-        getSelectedClipboardFormat() || DEFAULT_EXPORT_PREFS.clipboardFormat;
-
-    const isExportFormDirty = () => {
-        const delimiter = getFormDelimiter();
-        if (!delimiter) return false;
-        const format = getFormClipboardFormat();
-        return (
-            delimiter !== currentExportPrefs.csvDelimiter ||
-            format !== currentExportPrefs.clipboardFormat
-        );
-    };
-
-    function updateExportSaveState() {
-        if (!exportSaveBtn) return;
-        const delimiter = getFormDelimiter();
-        if (!delimiter) {
-            exportSaveBtn.disabled = true;
-            return;
-        }
-        exportSaveBtn.disabled = !isExportFormDirty();
+        csvDelimiterInput.addEventListener("blur", () => {
+            queueExportSave();
+        });
     }
 
     clipboardFormatRadios.forEach((radio) => {
-        radio.addEventListener("change", () => updateExportSaveState());
+        radio.addEventListener("change", () => {
+            updateClipboardModifierHints();
+            queueExportSave();
+        });
     });
 
     loadExportPrefs();
-    updateExportSaveState();
+    updateClipboardModifierHints();
 
     // Icons rendered via CSS masks; no runtime URL required
 

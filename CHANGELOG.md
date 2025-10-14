@@ -1,5 +1,17 @@
 # Changelog
 
+# Changelog
+
+## v1.0.5
+
+- Feat: Copy selection now exposes quick toggles in the options UI, surfaces tooltips/badges, and supports Alt/Shift overrides to switch clipboard formats on the fly.
+- Fix: CSV export now wraps values in quotes so embedded separators are handled correctly.
+- Fix: Corrected pluralisation for the Quick Actions label in the UI.
+- Fix: Removed the redundant floating “Add” button from the options page.
+- Enhancement: Export preferences are now saved automatically as soon as you change the delimiter or clipboard format in the options page.
+- Docs: README and Usage guide updated with modifier workflow details.
+- docs: Managed configuration samples available in `docs/MDM-samples/`.
+
 ## v1.0.4
 
 - Fix: Menu export buttons works with all tables.

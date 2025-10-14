@@ -17,6 +17,16 @@
         textFormat: 'markdown',
     };
 
+    const CLIPBOARD_FORMAT_LABELS = {
+        html: 'HTML table',
+        markdown: 'Markdown',
+        ascii: 'ASCII table',
+        tsv: 'TSV',
+        csv: 'CSV',
+    };
+
+    const CLIPBOARD_FORMAT_SEQUENCE = ['html', 'markdown', 'ascii', 'tsv', 'csv'];
+
     const runtimeConfig = {
         csvDelimiter: DEFAULT_PREFS.csvDelimiter,
         textFormat: DEFAULT_PREFS.textFormat,
@@ -76,6 +86,31 @@
         applyTextFormat(partial);
         applyMaxRows(partial);
         applyDownloadFilename(partial);
+    }
+
+    // Return the currently configured clipboard format (normalized).
+    function getClipboardFormat() {
+        const raw = runtimeConfig.textFormat || DEFAULT_PREFS.textFormat;
+        if (typeof raw !== 'string' || !raw.trim()) return DEFAULT_PREFS.textFormat;
+        return raw.trim().toLowerCase();
+    }
+
+    // Provide a human friendly label for the clipboard format.
+    function getClipboardFormatLabel() {
+        const format = getClipboardFormat();
+        return describeClipboardFormat(format);
+    }
+
+    // Provide a human-friendly label for a supplied clipboard format.
+    function describeClipboardFormat(format) {
+        if (typeof format !== 'string' || !format) return '';
+        const key = format.trim().toLowerCase();
+        return CLIPBOARD_FORMAT_LABELS[key] || key;
+    }
+
+    // Return the ordered list of supported clipboard formats.
+    function getClipboardFormatSequence() {
+        return CLIPBOARD_FORMAT_SEQUENCE.slice();
     }
 
     // Locate the main results table rendered by Nexthink investigations.
@@ -239,9 +274,8 @@
     // CSV-safe string: quote/escape when a delimiter, quote, or newline is present.
     function serializeCsvCell(value, delimiter) {
         const str = value === undefined || value === null ? '' : String(value);
-        const needsQuote = /["]/.test(str) || str.includes(delimiter) || /[\r\n]/.test(str);
         const escaped = str.replace(/"/g, '""');
-        return needsQuote ? `"${escaped}"` : escaped;
+        return `"${escaped}"`;
     }
 
     // Turn the selection payload into a CSV document (CRLF-separated) using the chosen delimiter.
@@ -658,6 +692,10 @@
         downloadCsv,
         showToast,
         getSelectionSummary,
+        getClipboardFormat,
+        getClipboardFormatLabel,
+        getClipboardFormatSequence,
+        describeClipboardFormat,
     };
 
     global.NqaExport = api;

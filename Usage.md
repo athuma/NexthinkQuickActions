@@ -30,8 +30,8 @@ This guide explains how to configure and use the Nexthink Quick Actions browser 
    - Managed (locked) items may be present if your administrator preconfigured them.
 5. **Tune export settings (optional)**
    - In the *Export settings* card, adjust the **CSV separator** used when downloading selections.
-   - Pick the **Clipboard format** (`Markdown`, `ASCII table`, or `HTML table`) applied when copying rows from Investigations. Use the HTML option when pasting into Outlook or other rich-text editors.
-   - Click **Save**; changes are applied immediately in all Nexthink tabs.
+   - Pick the **Clipboard format** (`Markdown`, `ASCII table`, or `HTML table`) applied when copying rows from Investigations. The card displays a *Quick toggles* reminder that tells you which modifier keys (`Alt` for the second format, `Shift` for the third) will temporarily override the default when you copy a selection. Use the HTML option when pasting into Outlook or other rich-text editors.
+   - Changes are saved automatically as soon as you leave the field or switch formats; no extra button is required.
 
 ## 3. Use quick actions inside Nexthink
 1. Navigate to **Device View** or **Investigations** in Nexthink.
@@ -46,17 +46,17 @@ This guide explains how to configure and use the Nexthink Quick Actions browser 
 - If no instance is configured yet, the popup displays an *Add Nexthink instance* button that opens the options page.
 - A global shortcut (`Alt+Shift+Q` by défaut sur Windows et macOS) ouvre aussi le popup et peut être ajusté via `chrome://extensions/shortcuts`.
 
-## 5. QuickAction cheat sheet panel
-1. On the left Nexthink menubar, a **QuickAction** icon is appended at the end.
+## 5. QuickActions cheat sheet panel
+1. On the left Nexthink menubar, a **QuickActions** icon is appended at the end.
 2. Click the icon to toggle the cheat sheet panel. The icon switches style when the panel is visible.
 3. The panel lists every detected column with its corresponding placeholder (e.g. `{devices_name}`).
 4. Click either the placeholder or *Copier* to copy it to your clipboard, then paste it into a quick action URL.
-5. The panel updates automatically as the table content changes. Close it by clicking the QuickAction icon again.
+5. The panel updates automatically as the table content changes. Close it by clicking the QuickActions icon again.
 
 ## 6. Export selected rows from Investigations
 1. Select one or more rows in an Investigation (use the checkboxes on the left).
 2. The Nexthink selection toolbar appears; it now includes the Spark icon followed by two actions:
-   - **Copy selection** – copies the selected rows plus column headers to the clipboard using the format chosen in the options page.
+   - **Copy selection** – copies the selected rows plus column headers to the clipboard using the format chosen in the options page. Hold `Alt` or `Shift` while clicking to momentarily switch to the alternate formats shown in the options card; a small badge (e.g., `(Markdown)`) appears next to the button when a modifier is active, and the toast message indicates the format that was used.
    - **Download CSV** – downloads a CSV file using the configured separator.
 3. Toast notifications confirm the number of rows exported and warn when a row limit is reached (default 200).
 4. When copying in ASCII format, paste into a monospaced font (Courier, Consolas, Monaco, Menlo, etc.) so the table columns stay aligned. HTML table output keeps the layout intact in Outlook and other HTML-aware clients.

@@ -10,6 +10,339 @@ const SELECTION_ACTION_STYLE_ID = 'nqa-export-action-style';
 const SELECTION_ACTION_BAR_SELECTOR = 'div[data-insights="undefined_action-bar"]';
 let currentSubmenuTrigger = null; // track open submenu trigger for toggle
 let cleanupFn = null; // cleanup for global listeners
+const copyTooltipTargets = new Set(); // track copy buttons needing tooltip updates
+const modifierIndicatorMap = new Map(); // map copy buttons to modifier state indicators
+const modifierState = { alt: false, shift: false }; // track pressed modifier keys
+const CLIPBOARD_MODIFIER_SEQUENCE = ['html', 'markdown', 'ascii']; // preferred modifier sequence
+
+// Build tooltip text reflecting the configured clipboard format.
+function buildClipboardTooltipText() {
+    const api = window.NqaExport;
+    if (!api) return '';
+    let label = '';
+    if (typeof api.getClipboardFormatLabel === 'function') {
+        label = api.getClipboardFormatLabel();
+    } else if (typeof api.getClipboardFormat === 'function') {
+        label = api.getClipboardFormat();
+    }
+    if (!label) return '';
+    return `Clipboard format: ${label}`;
+}
+
+// Apply tooltip to a specific button.
+function applyClipboardTooltip(target) {
+    if (!(target instanceof Element)) return;
+    const text = buildClipboardTooltipText();
+    if (text) target.setAttribute('title', text);
+    else target.removeAttribute('title');
+}
+
+// Register a button so tooltip stays in sync with preferences.
+function registerClipboardTooltipTarget(target) {
+    if (!(target instanceof Element)) return;
+    copyTooltipTargets.add(target);
+    applyClipboardTooltip(target);
+}
+
+// Remove button from tracking when it is no longer in use.
+function unregisterClipboardTooltipTarget(target) {
+    if (!target) return;
+    copyTooltipTargets.delete(target);
+}
+
+// Refresh tooltip text on all tracked buttons (call on config changes).
+function refreshClipboardTooltips() {
+    const stale = [];
+    copyTooltipTargets.forEach((el) => {
+        if (!(el instanceof Element) || !document.contains(el)) {
+            stale.push(el);
+            return;
+        }
+        applyClipboardTooltip(el);
+    });
+    stale.forEach((el) => copyTooltipTargets.delete(el));
+}
+
+// Return a human-friendly caption for a clipboard format identifier.
+function describeClipboardFormatForUi(format) {
+    if (!format) return '';
+    const api = window.NqaExport;
+    if (api && typeof api.describeClipboardFormat === 'function') {
+        try { return api.describeClipboardFormat(format); }
+        catch (_) { /* ignore */ }
+    }
+    return String(format);
+}
+
+// Build the ordered list of clipboard formats considered for modifiers.
+function buildModifierFormatSequence(defaultFormat) {
+    const api = window.NqaExport;
+    let base = null;
+    if (api && typeof api.getClipboardFormatSequence === 'function') {
+        try {
+            const seq = api.getClipboardFormatSequence();
+            if (Array.isArray(seq) && seq.length) base = seq.map((item) => String(item || '').trim().toLowerCase());
+        } catch (_) { base = null; }
+    }
+    const sequence = [];
+    const seen = new Set();
+    const push = (value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized || seen.has(normalized)) return;
+        seen.add(normalized);
+        sequence.push(normalized);
+    };
+    if (defaultFormat) push(defaultFormat);
+    (base || CLIPBOARD_MODIFIER_SEQUENCE).forEach(push);
+    if (!sequence.length) push('html');
+    return sequence;
+}
+
+// Resolve the base clipboard format that should be used when no modifier is pressed.
+function resolveDefaultClipboardFormat(api) {
+    let chosen = '';
+    if (api && typeof api.getClipboardFormat === 'function') {
+        try { chosen = api.getClipboardFormat(); }
+        catch (_) { chosen = ''; }
+    }
+    if (typeof chosen !== 'string' || !chosen.trim()) {
+        const fallback = api?.DEFAULT_PREFS?.textFormat || 'markdown';
+        chosen = fallback;
+    }
+    return String(chosen || '').trim().toLowerCase() || 'markdown';
+}
+
+// Normalize and deduplicate a sequence of formats while keeping the default first.
+function buildOrderedFormatList(sequence, defaultFormat) {
+    const ordered = [];
+    const seen = new Set();
+    const push = (value) => {
+        const key = String(value || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        ordered.push(key);
+    };
+    push(defaultFormat);
+    sequence.forEach(push);
+    return ordered;
+}
+
+// Pick alternate formats for Alt and Shift keys from the ordered list.
+function pickModifierFormats(orderedFormats, defaultFormat) {
+    const alt = orderedFormats.find((fmt) => fmt !== defaultFormat) || null;
+    const shift = orderedFormats.find((fmt) => fmt !== defaultFormat && fmt !== alt) || alt || null;
+    return { alt, shift };
+}
+
+// Resolve default, Alt and Shift formats together with display labels.
+function computeModifierFormats() {
+    const api = window.NqaExport;
+    if (!api) return null;
+    const defaultFormat = resolveDefaultClipboardFormat(api);
+    const sequence = buildModifierFormatSequence(defaultFormat);
+    const ordered = buildOrderedFormatList(sequence, defaultFormat);
+    const { alt: altFormat, shift: shiftFormat } = pickModifierFormats(ordered, defaultFormat);
+    const altLabel = altFormat ? describeClipboardFormatForUi(altFormat) : '';
+    const shiftLabel = shiftFormat ? describeClipboardFormatForUi(shiftFormat) : '';
+    return { defaultFormat, altFormat, shiftFormat, altLabel, shiftLabel };
+}
+
+// Determine which modifier (if any) is currently overriding the format.
+function getActiveModifierState() {
+    const mapping = computeModifierFormats();
+    if (!mapping) return null;
+    if (modifierState.alt && mapping.altFormat && mapping.altFormat !== mapping.defaultFormat) {
+        return {
+            key: 'Alt',
+            format: mapping.altFormat,
+            label: mapping.altLabel || mapping.altFormat,
+        };
+    }
+    if (modifierState.shift && mapping.shiftFormat && mapping.shiftFormat !== mapping.defaultFormat) {
+        return {
+            key: 'Shift',
+            format: mapping.shiftFormat,
+            label: mapping.shiftLabel || mapping.shiftFormat,
+        };
+    }
+    return null;
+}
+
+// Update modifier chips on all tracked buttons so they match current keys.
+function refreshModifierIndicators() {
+    ensureModifierIndicatorTargets();
+    const mapping = computeModifierFormats();
+    const state = mapping ? getActiveModifierState() : null;
+    const stale = [];
+    modifierIndicatorMap.forEach((entry, target) => {
+        if (!(target instanceof Element)) {
+            stale.push(target);
+            return;
+        }
+        if (!target.isConnected) {
+            if (!entry?.chip || !entry.chip.isConnected) stale.push(target);
+            return;
+        }
+        if (!entry || !entry.chip) return;
+    if (state) {
+        const label = state.label || state.format;
+        entry.chip.textContent = `\u00A0(${label})`;
+        entry.chip.hidden = false;
+        target.setAttribute('data-nqa-modifier-active', '1');
+        target.classList.add('nqa-modifier-active');
+    } else {
+        entry.chip.textContent = '';
+        entry.chip.hidden = true;
+        target.removeAttribute('data-nqa-modifier-active');
+        target.classList.remove('nqa-modifier-active');
+    }
+    });
+    stale.forEach((target) => unregisterModifierIndicatorTarget(target));
+}
+
+// Register any copy buttons in DOM that are missing modifier indicators.
+function ensureModifierIndicatorTargets() {
+    const candidates = document.querySelectorAll(`[${SELECTION_BUTTON_ATTR}][data-nqa-export-copy="1"]`);
+    candidates.forEach((el) => {
+        if (!(el instanceof Element)) return;
+        if (!modifierIndicatorMap.has(el)) {
+            registerModifierIndicatorTarget(el);
+        }
+    });
+}
+
+// Attach modifier indicator elements to the provided copy button.
+function registerModifierIndicatorTarget(target) {
+    if (!(target instanceof Element)) return;
+    if (modifierIndicatorMap.has(target)) {
+        refreshModifierIndicators();
+        return;
+    }
+    const chip = document.createElement('span');
+    chip.className = 'nqa-export-modifier-chip';
+    chip.setAttribute('aria-hidden', 'true');
+    chip.hidden = true;
+    try {
+        target.appendChild(chip);
+    } catch (_) {
+        try { target.insertAdjacentElement('beforeend', chip); }
+        catch (__) { return; }
+    }
+    modifierIndicatorMap.set(target, {
+        chip,
+    });
+    target.classList.add('nqa-export-modifier-anchor');
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => refreshModifierIndicators());
+    } else {
+        setTimeout(() => refreshModifierIndicators(), 0);
+    }
+}
+
+// Remove the modifier indicator bindings associated with a copy button.
+function unregisterModifierIndicatorTarget(target) {
+    if (!(target instanceof Element)) return;
+    const entry = modifierIndicatorMap.get(target);
+    if (!entry) return;
+    modifierIndicatorMap.delete(target);
+    try { entry.chip.remove(); } catch (_) {}
+    target.classList.remove('nqa-export-modifier-anchor');
+    target.classList.remove('nqa-modifier-active');
+    target.removeAttribute('data-nqa-modifier-active');
+}
+
+// Update a stored modifier flag and report whether the value changed.
+function setModifierFlag(flag, value) {
+    if (!Object.prototype.hasOwnProperty.call(modifierState, flag)) return false;
+    const normalized = !!value;
+    if (modifierState[flag] === normalized) return false;
+    modifierState[flag] = normalized;
+    return true;
+}
+
+// Reset all modifier keys back to their default (inactive) state.
+function clearModifierState() {
+    let changed = false;
+    if (modifierState.alt) {
+        modifierState.alt = false;
+        changed = true;
+    }
+    if (modifierState.shift) {
+        modifierState.shift = false;
+        changed = true;
+    }
+    if (changed) refreshModifierIndicators();
+}
+
+// Handle keydown events to detect Alt/Shift activation.
+function handleModifierKeyDown(event) {
+    if (!event) return;
+    let changed = false;
+    if (event.key === 'Alt' || event.key === 'AltGraph') {
+        changed = setModifierFlag('alt', true) || changed;
+    }
+    if (event.key === 'Shift') {
+        changed = setModifierFlag('shift', true) || changed;
+    }
+    if (event.altKey && !modifierState.alt) {
+        changed = setModifierFlag('alt', true) || changed;
+    }
+    if (event.shiftKey && !modifierState.shift) {
+        changed = setModifierFlag('shift', true) || changed;
+    }
+    if (changed) refreshModifierIndicators();
+}
+
+// Handle keyup events to clear modifier flags when keys are released.
+function handleModifierKeyUp(event) {
+    if (!event) return;
+    let changed = false;
+    if (event.key === 'Alt' || event.key === 'AltGraph') {
+        changed = setModifierFlag('alt', false) || changed;
+    }
+    if (event.key === 'Shift') {
+        changed = setModifierFlag('shift', false) || changed;
+    }
+    if (!event.altKey && modifierState.alt) {
+        changed = setModifierFlag('alt', false) || changed;
+    }
+    if (!event.shiftKey && modifierState.shift) {
+        changed = setModifierFlag('shift', false) || changed;
+    }
+    if (changed) refreshModifierIndicators();
+}
+
+// Sync modifier flags from pointer events (covers trackpads, stylus buttons, etc.).
+function handleModifierPointer(event) {
+    if (!event) return;
+    let changed = false;
+    changed = setModifierFlag('alt', !!event.altKey) || changed;
+    changed = setModifierFlag('shift', !!event.shiftKey) || changed;
+    if (changed) refreshModifierIndicators();
+}
+
+// Clear modifiers if focus leaves the window while a key is held.
+function handleModifierBlur() {
+    clearModifierState();
+}
+
+// Reset modifier state when the document becomes hidden.
+function handleVisibilityChange() {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState !== 'visible') clearModifierState();
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', handleModifierKeyDown, true);
+    document.addEventListener('keyup', handleModifierKeyUp, true);
+    document.addEventListener('pointerdown', handleModifierPointer, true);
+    document.addEventListener('pointermove', handleModifierPointer, true);
+    document.addEventListener('pointerup', handleModifierPointer, true);
+    document.addEventListener('visibilitychange', handleVisibilityChange, true);
+}
+if (typeof window !== 'undefined') {
+    window.addEventListener('blur', handleModifierBlur, true);
+}
 
 // Build a native-like menu entry (container -> contents -> anchor) using classes from an existing item
 function buildAnchoredMenuItem(container, label, href, onClick) {
@@ -995,6 +1328,8 @@ function applyExportPreferences(prefs) {
         cfg.textFormat = prefs.clipboardFormat;
     }
     try { window.NqaExport.setConfig(cfg); } catch (_) {}
+    refreshClipboardTooltips();
+    refreshModifierIndicators();
 }
 
 // Lazily inject CSS for the injected export buttons and fallback bar.
@@ -1015,6 +1350,12 @@ function ensureSelectionActionStyles() {
         html[data-theme="light"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn:hover{background:#1f1f1f}
         html[data-theme="dark"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn{background:#ffffff;color:#1f1f1f;border:0;text-align:left;width:100%;display:block}
         html[data-theme="dark"] ${SELECTION_ACTION_BAR_SELECTOR} .nqa-export-action-btn:hover{background:#f4f4f4}
+        [${SELECTION_BUTTON_ATTR}]{position:relative;overflow:visible!important}
+        [${SELECTION_BUTTON_ATTR}][data-nqa-modifier-active="1"]{box-shadow:0 0 0 2px rgba(53,120,229,0.45)}
+        @media (prefers-color-scheme: dark){[${SELECTION_BUTTON_ATTR}][data-nqa-modifier-active="1"]{box-shadow:0 0 0 2px rgba(53,120,229,0.65)}}
+        .nqa-export-modifier-chip{position:absolute;z-index:2147483645;left:50%;top:calc(100% + 6px);transform:translateX(-50%);display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font-size:12px;line-height:1.2;background:rgba(53,120,229,0.12);color:#1f1f1f;box-shadow:0 6px 14px rgba(0,0,0,0.18)}
+        .nqa-export-modifier-chip[hidden]{display:none!important}
+        @media (prefers-color-scheme: dark){.nqa-export-modifier-chip{background:rgba(53,120,229,0.28);color:#f2f4f8;box-shadow:0 6px 18px rgba(0,0,0,0.45)}}
         `;
     document.head.appendChild(style);
 }
@@ -1124,7 +1465,7 @@ function buildSparkIconMenuItem(container) {
 }
 
 // Produce a human-friendly toast message describing the export outcome.
-function buildSelectionFeedback(action, payload) {
+function buildSelectionFeedback(action, payload, formatLabel) {
     const verb = action === 'download' ? 'Exported' : 'Copied';
     const rows = payload?.rows;
     if (!Array.isArray(rows) || rows.length === 0) return `No rows ${verb.toLowerCase()}.`;
@@ -1132,13 +1473,17 @@ function buildSelectionFeedback(action, payload) {
     const count = rows.length;
     const noun = count === 1 ? 'row' : 'rows';
     const total = typeof payload?.totalSelected === 'number' ? payload.totalSelected : count;
+    let message = '';
     if (payload?.truncated && total > count) {
         const limit = typeof payload?.limitUsed === 'number'
             ? payload.limitUsed
             : window.NqaExport?.MAX_ROWS_DEFAULT || 200;
-        return `${verb} ${count} of ${total} ${noun} (limit ${limit}).`;
+        message = `${verb} ${count} of ${total} ${noun} (limit ${limit}).`;
+    } else {
+        message = `${verb} ${count} ${noun}.`;
     }
-    return `${verb} ${count} ${noun}.`;
+    if (formatLabel) return `${message} (${formatLabel})`;
+    return message;
 }
 
 // Lightweight visibility check for Nexthink popovers (helps avoid injecting into hidden elements).
@@ -1206,6 +1551,7 @@ function injectSelectionMenu(menu) {
 
     const copyEntry = buildSelectionMenuEntry(menu, 'Copy selection', handleSelectionCopy);
     const csvEntry = buildSelectionMenuEntry(menu, 'Download\u00a0CSV', handleSelectionDownload);
+    const copyTarget = copyEntry ? (copyEntry.button || copyEntry.root) : null;
     const frag = document.createDocumentFragment();
 
     const separatorBefore = buildMenuSeparator(menu) || document.createElement('div');
@@ -1219,11 +1565,19 @@ function injectSelectionMenu(menu) {
     if (!separatorAfter.hasAttribute?.(INJECTED_ATTR)) separatorAfter.setAttribute?.(INJECTED_ATTR, '1');
     frag.appendChild(separatorAfter);
 
-    if (copyEntry?.root) frag.appendChild(copyEntry.root);
+    if (copyEntry?.root) {
+        frag.appendChild(copyEntry.root);
+    }
     if (csvEntry?.root) frag.appendChild(csvEntry.root);
 
     try { menu.appendChild(frag); }
     catch (_) { return false; }
+
+    if (copyTarget) {
+        copyTarget.setAttribute('data-nqa-export-copy', '1');
+        registerClipboardTooltipTarget(copyTarget);
+        registerModifierIndicatorTarget(copyTarget);
+    }
 
     selectionMenuRef = menu;
     try { menu.setAttribute(SELECTION_MENU_ATTR, '1'); } catch (_) {}
@@ -1231,8 +1585,14 @@ function injectSelectionMenu(menu) {
         try { separatorBefore.remove(); } catch (_) {}
         try { separatorAfter.remove(); } catch (_) {}
         try { sparkItem?.remove(); } catch (_) {}
-        try { copyEntry.root.remove(); } catch (_) {}
-        try { csvEntry.root.remove(); } catch (_) {}
+        if (copyTarget) {
+            unregisterModifierIndicatorTarget(copyTarget);
+            unregisterClipboardTooltipTarget(copyTarget);
+        }
+        if (copyEntry?.root) { try { copyEntry.root.remove(); } catch (_) {} }
+        if (csvEntry?.root) {
+            try { csvEntry.root.remove(); } catch (_) {}
+        }
     };
     return true;
 }
@@ -1251,6 +1611,7 @@ function ensureFallbackBar() {
         copyBtn.className = 'nqa-export-action-btn';
         copyBtn.textContent = 'Copy selection';
         copyBtn.setAttribute(SELECTION_BUTTON_ATTR, '1');
+        copyBtn.setAttribute('data-nqa-export-copy', '1');
         copyBtn.addEventListener('click', handleSelectionCopy);
 
         const csvBtn = document.createElement('button');
@@ -1263,9 +1624,13 @@ function ensureFallbackBar() {
         bar.appendChild(copyBtn);
         bar.appendChild(csvBtn);
         document.body.appendChild(bar);
+        registerClipboardTooltipTarget(copyBtn);
+        registerModifierIndicatorTarget(copyBtn);
     }
     bar.classList.add('show');
     selectionFallbackRef = bar;
+    refreshClipboardTooltips();
+    refreshModifierIndicators();
     return bar;
 }
 
@@ -1293,9 +1658,14 @@ async function handleSelectionCopy(event) {
         api.showToast('No rows selected', { anchor });
         return;
     }
-    const clipboardData = api.buildClipboardData ? api.buildClipboardData(payload) : { plain: api.buildPlainText(payload) };
+    const modifier = getActiveModifierState();
+    const formatOverride = modifier?.format || null;
+    const clipboardData = api.buildClipboardData
+        ? api.buildClipboardData(payload, formatOverride)
+        : { plain: api.buildPlainText(payload, formatOverride || undefined) };
     const ok = await api.copyToClipboard(clipboardData);
-    api.showToast(ok ? buildSelectionFeedback('copy', payload) : 'Unable to copy selection', { anchor });
+    const formatLabel = modifier?.label || '';
+    api.showToast(ok ? buildSelectionFeedback('copy', payload, formatLabel) : 'Unable to copy selection', { anchor });
 }
 
 // Handle click on "Download CSV" (collect data, serialize, show toast).

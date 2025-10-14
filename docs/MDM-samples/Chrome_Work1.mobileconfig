@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>PayloadIdentifier</key>
+        <string>com.corp.chrome.NQA</string>
+        <key>PayloadUUID</key>
+        <string>b9d0f3a6-62d7-4a0a-9f93-0a4a5fa58c01</string>
+        <key>PayloadDisplayName</key>
+        <string>CORP_Chrome_NQA</string>
+        <key>PayloadOrganization</key>
+        <string>Corp Society</string>
+        <key>PayloadType</key>
+        <string>Configuration</string>
+        <key>PayloadVersion</key>
+        <integer>1</integer>
+        <key>PayloadContent</key>
+        <array>
+            <dict>
+                <key>PayloadType</key>
+                <string>com.apple.ManagedClient.preferences</string>
+                <key>PayloadVersion</key>
+                <integer>1</integer>
+                <key>PayloadIdentifier</key>
+                <string>com.corp.chrome.NQA.chromeprefs</string>
+                <key>PayloadUUID</key>
+                <string>c7e1fb4d-6f3e-49db-8b8e-3b247a7f1b7a</string>
+                <key>PayloadDisplayName</key>
+                <string>Microsoft Chrome - Policies</string>
+                <key>PayloadOrganization</key>
+                <string>Corp Society</string>
+                <key>PayloadContent</key>
+                <dict>
+                    <key>com.google.Chrome</key>
+                    <dict>
+                        <key>Forced</key>
+                        <array>
+                            <dict>
+                                <key>mcx_preference_settings</key>
+                                <dict>
+                                    <!-- Allow the developer toolbar when the extension is in forced
+                                    installation mode. -->
+                                    <key>DeveloperToolsAvailability</key>
+                                    <integer>1</integer>
+                                    <key>ExtensionInstallForcelist</key>
+                                    <array>
+                                        <string>
+                                            jkgmoahabfeflkhecgaofocjaojnmlag;ttps://clients2.google.com/service/update2/crx</string>
+                                    </array>
+                                    <key>ExtensionSettings</key>
+                                    <dict>
+                                        <key>jkgmoahabfeflkhecgaofocjaojnmlag</key>
+                                        <dict>
+                                            <key>installation_mode</key>
+                                            <string>force_installed</string>
+                                            <key>update_url</key>
+                                            <string>ttps://clients2.google.com/service/update2/crx</string>
+                                            <key>toolbar_state</key>
+                                            <string>force_shown</string>
+                                        </dict>
+                                    </dict>
+                                </dict>
+                            </dict>
+                        </array>
+                    </dict>
+                </dict>
+            </dict>
+
+            <dict>
+                <key>PayloadType</key>
+                <string>com.apple.ManagedClient.preferences</string>
+                <key>PayloadVersion</key>
+                <integer>1</integer>
+                <key>PayloadIdentifier</key>
+                <string>com.corp.chrome.NQA.extprefs</string>
+                <key>PayloadUUID</key>
+                <string>f4f87d38-8a86-4a82-9c5b-2b2a0f7b3b2f</string>
+                <key>PayloadDisplayName</key>
+                <string>Chrome Extension - NQA preferences</string>
+                <key>PayloadOrganization</key>
+                <string>Corp Society</string>
+                <key>PayloadContent</key>
+                <dict>
+                    <key>com.google.Chrome.extensions.jkgmoahabfeflkhecgaofocjaojnmlag</key>
+                    <dict>
+                        <key>Forced</key>
+                        <array>
+                            <dict>
+                                <key>mcx_preference_settings</key>
+                                <dict>
+                                    <key>instance</key>
+                                    <dict>
+                                        <key>name</key>
+                                        <string>CORP</string>
+                                        <key>url</key>
+                                        <string>https://corp.eu.nexthink.cloud</string>
+                                    </dict>
+                                    <key>menu</key>
+                                    <array>
+                                        <dict>
+                                            <key>name</key>
+                                            <string>Open in ServiceNow</string>
+                                            <key>url</key>
+                                            <string>https://corp.service-now.com/now/{dtc}</string>
+                                        </dict>
+                                    </array>
+                                </dict>
+                            </dict>
+                        </array>
+                    </dict>
+                </dict>
+            </dict>
+        </array>
+    </dict>
+</plist>

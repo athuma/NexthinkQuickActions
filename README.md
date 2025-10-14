@@ -5,10 +5,10 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 ## What the extension delivers
 - **Context menu quick actions** – injects a "Quick Actions" submenu in Nexthink kebab menus (Device View and Investigations). Entries open new tabs using placeholders that are resolved from the selected row.
 - **Browser action popup** – provides a compact launcher that jumps directly to Device View for a device name, with a shortcut to the settings page when the instance is not yet configured.
-- **Cheat-sheet toggle** – adds a QuickAction icon to the Nexthink top menubar that reveals a panel listing all detected column placeholders, with one-click copy to help authors build URLs.
+- **Cheat-sheet toggle** – adds a QuickActions icon to the Nexthink top menubar that reveals a panel listing all detected column placeholders, with one-click copy to help authors build URLs.
 - **Friendly configuration surface** – an options page to maintain the Nexthink instance URL, manage quick action rows, reorder entries, tune export preferences, and import/export JSON bundles.
 - **Investigation export helpers** – augments the bulk-selection toolbar with NQA-branded actions to copy selected rows (Markdown, ASCII, or HTML) or download a CSV using your preferred separator.
-- **Policy-driven deployment** – supports Chrome managed storage, including overlay vs seed modes, so administrators can pre-load and lock menus, instance settings, or export preferences. Sample payloads and deployment scripts are available in `managed-config-examples/`.
+- **Policy-driven deployment** – supports Chrome managed storage, including overlay vs seed modes, so administrators can pre-load and lock menus, instance settings, or export preferences. Sample payloads and deployment scripts are available in `docs/MDM-samples/`.
 
 ## Configuration workflow
 ### Accessing the options page
@@ -22,7 +22,7 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - The helper text explains the placeholder syntax. Validation ensures the template is `http(s)://` and contains at least one `{placeholder}` token. Wildcards (`*`) inside placeholders act as glob-like patterns matched against captured column keys.
 
 ### Export settings, import/export, and JSON format
-- Use the *Export settings* card to choose the CSV separator used during downloads and the clipboard format (`Markdown`, `ASCII table`, or `HTML table`) applied when copying selections from Investigations.
+- Use the *Export settings* card to choose the CSV separator used during downloads and the clipboard format (`Markdown`, `ASCII table`, or `HTML table`) applied when copying selections from Investigations. When you pick a default clipboard format, the card now shows a *Quick toggles* hint that reminds you which modifier keys (`Alt` and `Shift`) will temporarily switch to the second and third formats during copy actions.
 - Use the toolbar buttons to export the current dataset to `NQA_Configuration.json` or import another JSON document. The modal lets you **Add** (append) or **Replace** the existing menu, and optionally override the instance when provided.
 - The expected structure matches `debug/NQA_Configuration+wildcard.json`:
   ```json
@@ -38,7 +38,7 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - Policies accept two modes:
   - **Overlay** (default): managed entries are merged into the user list. Flags `allowUserEntries` and `lockManagedEntries` control whether users may add/edit their own entries.
   - **Seed**: managed data seeds the user profile once. With `seedReplace=true`, it overwrites any existing configuration on first load.
-- For Chrome Enterprise or macOS deployment, adapt `managed-config-examples/Chrome_Work1.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance, menu, and export preferences under `ExtensionSettings`.
+- For Chrome Enterprise or macOS deployment, adapt `docs/MDM-samples/Chrome_Work1.mobileconfig` by replacing the placeholder extension ID (`XXXXXXXX`). The managed payload sets the instance, menu, and export preferences under `ExtensionSettings`.
 - The same directory also contains Intune remediation/compliance scripts (`NQARemediation.ps1`, `NQAChecking.ps1`) that align with the managed schema.
 - See the [managed policy behaviour matrix](docs/managed-policy-matrix.md) for detailed combinations and their impact on end users.
 
@@ -49,10 +49,10 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - Clicking a quick action opens the resolved URL in a new tab. The submenu closes automatically and tracks focus state so multiple menus cannot overlap.
 - The submenu header now displays the Nexthink Spark icon between separators to clearly distinguish native actions from extension-provided entries.
 
-### Selection export shortcuts
 - When rows are selected in Investigations, the Nexthink selection toolbar is enhanced with the Spark icon followed by **Copy selection** and **Download CSV**.
-- The copy action respects the clipboard format defined in the options page, while the CSV action uses the configured delimiter.
-- Toast notifications confirm the number of exported rows and signal when the limit (default 200) truncates the selection.
+- The copy action respects the clipboard format defined in the options page; hold `Alt` or `Shift` while clicking to temporarily switch to the alternate formats shown in the options card. A small indicator appears next to the button to confirm which mode is active.
+- The CSV action always uses the configured delimiter.
+- Toast notifications confirm the number of exported rows and now mention the clipboard format when a modifier override is used. They also signal when the limit (default 200) truncates the selection.
 - When using the ASCII clipboard format, paste into a monospaced font (Courier, Consolas, Monaco, Menlo, etc.) to preserve the table grid. Choose the HTML table format when pasting into rich-text clients such as Outlook.
 
 ### Placeholder resolution
@@ -60,7 +60,7 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - Placeholders without a matching key remain untouched, which keeps URLs predictable during troubleshooting.
 
 ### Cheat-sheet toggle and panel
-- `content-cheatsheet.js` watches for the Investigations context. Once active, it clones the Nexthink menubar structure to append a **QuickAction** icon with a toggle state.
+- `content-cheatsheet.js` watches for the Investigations context. Once active, it clones the Nexthink menubar structure to append a **QuickActions** icon with a toggle state.
 - The floating panel lists every column detected in the current table along with its normalized placeholder (e.g. `{devices_name}`). Copy buttons and toast notifications simplify building URLs for new actions.
 - A dark-mode friendly stylesheet (`#nqa-cheatsheet-style`) keeps the panel visually aligned with the Nexthink UI.
 
@@ -79,13 +79,13 @@ Nexthink Quick Actions is a Chrome/Edge extension that augments the Nexthink web
 - `content-cheatsheet.js` – Investigations placeholder helper + menu toggle.
 - `popup/` – browser action markup, styles, and logic.
 - `icons/` – Spark logos and extension icons referenced by the manifest and injected menus.
-- `docs/` – supplementary documentation (policy behaviour matrix, deployment guidance, etc.).
+- `docs/` – supplementary documentation (policy behaviour matrix, MDM deployment samples in `MDM-samples/`, etc.).
 
 ## Getting started
 1. Load the folder as an unpacked extension in Chrome/Edge (`chrome://extensions` → Developer mode → Load unpacked).
 2. Configure the Nexthink instance and quick actions via the options page, or use the **Templates** button to bootstrap a few example entries.
 3. Open a Nexthink Device View or Investigation, trigger the kebab menu, and use the "Quick Actions" submenu to launch downstream tools.
-4. Use the QuickAction toggle in the menubar to review available placeholders while authoring new links.
+4. Use the QuickActions toggle in the menubar to review available placeholders while authoring new links.
 
 ## Troubleshooting tips
 - If the submenu does not appear, confirm that the column you are using has a matching placeholder in your URL template. The cheat-sheet panel shows the exact keys the script detects.

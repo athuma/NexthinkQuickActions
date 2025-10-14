@@ -77,15 +77,26 @@
                 </label>
               </div>
               <div class="help-text">Choose how copied selections are formatted.</div>
+              <div class="modifier-card" id="clipboardModifierCard" aria-live="polite">
+                <div class="modifier-card-title">Quick toggles</div>
+                <p class="modifier-card-desc">Hold a modifier while clicking "Copy selection" to switch format just once.</p>
+                <ul class="modifier-card-list">
+                  <li class="modifier-card-item" id="clipboardModifierAltRow">
+                    <span class="modifier-key"><kbd>Alt</kbd></span>
+                    <span class="modifier-action">Switches to <span class="modifier-target" id="clipboardModifierAlt">Markdown</span></span>
+                  </li>
+                  <li class="modifier-card-item" id="clipboardModifierShiftRow">
+                    <span class="modifier-key"><kbd>Shift</kbd></span>
+                    <span class="modifier-action">Switches to <span class="modifier-target" id="clipboardModifierShift">ASCII table</span></span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
           <div class="section-footer">
             <span class="save-status" id="exportSaveStatus" role="status" aria-live="polite"></span>
-            <button class="btn btn-success" id="exportSaveBtn" type="button">Save</button>
           </div>
         </section>
-        <!-- Floating Add button at bottom-right of panel content -->
-        <button class="btn add-floating" id="addFloatingBtn" type="button" aria-label="Add menu entry">Add</button>
       </div>
       <div class="toolbar">
         <button class="btn" id="templateBtn" type="button">Templates</button>

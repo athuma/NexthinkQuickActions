@@ -210,8 +210,8 @@
         if (!anchor) return;
         while (anchor.firstChild) anchor.removeChild(anchor.firstChild);
         anchor.removeAttribute("id");
-        anchor.title = "QuickAction – Placeholders";
-        anchor.setAttribute("aria-label", "QuickAction – Placeholders");
+        anchor.title = "QuickActions – Placeholders";
+        anchor.setAttribute("aria-label", "QuickActions – Placeholders");
         anchor.setAttribute("aria-haspopup", "false");
         anchor.setAttribute("tabindex", "-1");
         const svgColor = templateItem
@@ -232,7 +232,7 @@
         } catch (_) {
             /* fallback handled below */
         }
-        anchor.textContent = "QuickAction";
+        anchor.textContent = "QuickActions";
     }
 
     // Update the textual anchor (if any) so the label matches the new toggle purpose.
@@ -243,12 +243,12 @@
         titleAnchor.removeAttribute("id");
         const titleDiv = titleAnchor.querySelector("div") || null;
         if (titleDiv) {
-            titleDiv.textContent = "QuickAction";
+            titleDiv.textContent = "QuickActions";
             try {
-                titleDiv.setAttribute("title", "QuickAction");
+                titleDiv.setAttribute("title", "QuickActions");
             } catch (_) {}
         } else {
-            titleAnchor.textContent = "QuickAction";
+            titleAnchor.textContent = "QuickActions";
         }
     }
 
@@ -292,7 +292,7 @@
         const wrap = document.createElement("div");
         wrap.id = "nqa-cheatsheet";
         const header = document.createElement("header");
-        header.innerHTML = `<span class="nqa-title">Quick Action Link Placeholders</span>`;
+        header.innerHTML = `<span class="nqa-title">Quick Actions Link Placeholders</span>`;
         const list = document.createElement("div");
         list.className = "nqa-list";
         wrap.appendChild(header);
