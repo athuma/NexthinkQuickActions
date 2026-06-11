@@ -219,6 +219,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!PH_RE.test(s)) return false;
         // Validate base URL with all placeholders replaced
         const base = s.replace(PH_RE, "X");
+        // Allow copy: prefix — no http needed, placeholder check already passed
+        if (s.startsWith("copy:")) return true;
         try {
             const u = new URL(base);
             return (
