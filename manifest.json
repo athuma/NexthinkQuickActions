@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Nexthink Quick Actions",
+  "name": "Nexthink Quick Addons",
   "version": "1.0.5",
-  "description": "Allows customization of the Nexthink context menu.",
+  "description": "Enhances the Nexthink Infinity console with custom quick actions, UNC path copy, CSV export and more.",
   "permissions": ["activeTab", "storage"],
   "content_scripts": [
     {
