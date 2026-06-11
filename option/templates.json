@@ -1,5 +1,9 @@
 [
     {
+        "name": "Copy C$ path (UNC)",
+        "url": "copy:\\\\{devices_name}\\C$"
+    },
+    {
         "name": "Search device in ServiceNow",
         "url": "https://{instance_name}.service-now.com/nav_to.do?uri=cmdb_ci_computer_list.do%3Fsysparm_query%3DnameLIKE{devices_name}"
     },
