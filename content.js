@@ -518,6 +518,79 @@ function getMenuFilteredByCurrentColumn(callback) {
     } catch (_) { callback([]); }
 }
 
+// ---------------------------------------------------------------------------
+// NQA UNC COPY: Lightweight toast for clipboard copy confirmation.
+// Uses window.NqaExport.showToast if available (so it looks native),
+// otherwise falls back to a plain self-contained toast div.
+// ---------------------------------------------------------------------------
+function nqaShowCopyToast(message) {
+    try {
+        if (window.NqaExport && typeof window.NqaExport.showToast === 'function') {
+            window.NqaExport.showToast(message);
+            return;
+        }
+    } catch (_) { /* fall through to built-in */ }
+
+    // Built-in fallback toast (matches the extension's visual style)
+    const FALLBACK_TOAST_ID = 'nqa-unc-toast';
+    const FALLBACK_STYLE_ID = 'nqa-unc-toast-style';
+
+    if (!document.getElementById(FALLBACK_STYLE_ID)) {
+        const style = document.createElement('style');
+        style.id = FALLBACK_STYLE_ID;
+        style.textContent = `
+            #${FALLBACK_TOAST_ID} {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                font-size: 13px;
+                line-height: 1.4;
+                z-index: 2147483647;
+                pointer-events: none;
+                max-width: 360px;
+                padding: 8px 14px;
+                border-radius: 8px;
+                background: rgba(255,255,255,0.95);
+                color: #1a1a1a;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08);
+                opacity: 0;
+                transform: translateY(6px);
+                transition: opacity 0.15s ease, transform 0.15s ease;
+            }
+            #${FALLBACK_TOAST_ID}.nqa-unc-toast-show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            @media (prefers-color-scheme: dark) {
+                #${FALLBACK_TOAST_ID} {
+                    background: rgba(17,17,17,0.92);
+                    color: #f3f3f3;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.35);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    let toast = document.getElementById(FALLBACK_TOAST_ID);
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = FALLBACK_TOAST_ID;
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message || '';
+    toast.classList.remove('nqa-unc-toast-show');
+    void toast.offsetWidth; // force reflow so transition restarts
+    toast.classList.add('nqa-unc-toast-show');
+
+    clearTimeout(toast._nqaHideTimer);
+    toast._nqaHideTimer = setTimeout(() => {
+        toast.classList.remove('nqa-unc-toast-show');
+    }, 2000);
+}
+// ---------------------------------------------------------------------------
+
 // Build submenu items for a given device name using stored configs.
 // Supports any placeholders of the form {name} and replaces them with values
 // from window.nqaPlaceHolder.rawValues if available.
@@ -758,10 +831,39 @@ function showCustomSubmenu(triggerEl, items) {
                     let url = '';
                     try { url = anchor.href || ''; } catch (_) { url = ''; }
                     try { console.log('[NQA] will open URL in new tab', url); } catch (_) {}
-                    try {
-                        if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                    } catch (_) {
-                        try { console.warn('[NQA] window.open failed'); } catch (__) {}
+
+                    // NQA UNC COPY: If URL starts with "copy:" copy the rest to clipboard instead of opening a tab.
+                    // Configure a Quick Action with URL template:  copy:\\{devices_name}\C$
+                    if (url && url.startsWith('copy:')) {
+                        const textToCopy = url.slice('copy:'.length);
+                        try {
+                            navigator.clipboard.writeText(textToCopy).then(() => {
+                                nqaShowCopyToast(`\uD83D\uDCCB Copied: ${textToCopy}`);
+                            }).catch(() => {
+                                // Fallback for environments where clipboard API is restricted
+                                try {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = textToCopy;
+                                    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(ta);
+                                    nqaShowCopyToast(`\uD83D\uDCCB Copied: ${textToCopy}`);
+                                } catch (_) {
+                                    nqaShowCopyToast('\u26A0\uFE0F Copy failed \u2014 paste manually: ' + textToCopy);
+                                }
+                            });
+                        } catch (_) {
+                            nqaShowCopyToast('\u26A0\uFE0F Copy failed \u2014 paste manually: ' + textToCopy);
+                        }
+                    } else {
+                        // Normal behavior: open URL in new tab
+                        try {
+                            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                        } catch (_) {
+                            try { console.warn('[NQA] window.open failed'); } catch (__) {}
+                        }
                     }
                     setTimeout(() => { try { console.log('[NQA] closing custom submenu'); } catch(_){} hideCustomSubmenu(); }, 0);
                     // e.stopPropagation();
