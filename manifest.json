@@ -23,15 +23,15 @@
     }
   ],
   "icons": {
-    "16":  "icons/spark16.png",
-    "32":  "icons/spark32.png",
-    "48":  "icons/spark48.png",
-    "128": "icons/spark128.png"
+    "16":  "icons/icon16.png",
+    "32":  "icons/icon32.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "action": {
     "default_icon": {
-      "16": "icons/spark16.png",
-      "32": "icons/spark32.png"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
     },
     "default_popup": "popup/popup.html"
   },
